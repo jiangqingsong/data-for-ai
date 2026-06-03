@@ -1,17 +1,19 @@
-"""配置管理模块 — 统一管理所有环境变量和参数"""
-import os
-from dotenv import load_dotenv
+"""配置管理模块 — 从系统环境变量读取所有参数
 
-load_dotenv()
+不使用 .env 文件，所有敏感信息通过系统环境变量配置：
+  Windows: setx DEEPSEEK_API_KEY "sk-xxx"
+  Linux:   export DEEPSEEK_API_KEY=sk-xxx
+"""
+import os
 
 
 class Config:
     """应用配置，所有参数从环境变量读取，提供合理默认值"""
 
-    # --- DeepSeek API ---
+    # --- DeepSeek API (火山引擎) ---
     DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     DEEPSEEK_BASE_URL: str = os.getenv(
-        "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
+        "DEEPSEEK_BASE_URL", "https://ark.cn-beijing.volces.com/api/compatible"
     )
 
     # --- LLM ---
@@ -37,5 +39,5 @@ class Config:
         """校验必要配置是否齐全，返回缺失项列表"""
         errors = []
         if not cls.DEEPSEEK_API_KEY:
-            errors.append("DEEPSEEK_API_KEY 未设置")
+            errors.append("DEEPSEEK_API_KEY 未设置 — 请在系统环境变量中配置")
         return errors
