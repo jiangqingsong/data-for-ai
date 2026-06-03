@@ -1,25 +1,48 @@
-"""配置管理模块 — 从系统环境变量读取所有参数
+"""配置管理模块 — 从 E:/AI-env/llm/config.json 读取敏感信息
 
-不使用 .env 文件，所有敏感信息通过系统环境变量配置：
-  Windows: setx DEEPSEEK_API_KEY "sk-xxx"
-  Linux:   export DEEPSEEK_API_KEY=sk-xxx
+所有 API Key、URL 等敏感配置统一管理在项目外部的配置文件中，
+不随代码入库，多项目共享。
+
+配置文件位置: E:/AI-env/llm/config.json
 """
+import json
 import os
+from pathlib import Path
+
+
+# 统一配置文件路径（多项目共享）
+_CONFIG_DIR = Path("E:/AI-env/llm")
+_CONFIG_FILE = _CONFIG_DIR / "config.json"
+
+
+def _load_secret_config() -> dict:
+    """加载外部敏感配置文件"""
+    if not _CONFIG_FILE.exists():
+        return {}
+    try:
+        with open(_CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+_secret = _load_secret_config()
+_deepseek = _secret.get("deepseek", {})
 
 
 class Config:
-    """应用配置，所有参数从环境变量读取，提供合理默认值"""
+    """应用配置 — 敏感信息从外部文件读取，普通参数有合理默认值"""
 
     # --- DeepSeek API (火山引擎) ---
-    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
-    DEEPSEEK_BASE_URL: str = os.getenv(
-        "DEEPSEEK_BASE_URL", "https://ark.cn-beijing.volces.com/api/compatible"
+    DEEPSEEK_API_KEY: str = _deepseek.get("api_key", "")
+    DEEPSEEK_BASE_URL: str = _deepseek.get(
+        "base_url", "https://ark.cn-beijing.volces.com/api/compatible"
     )
 
     # --- LLM ---
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "deepseek-chat")
-    LLM_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.1"))
-    LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "1024"))
+    LLM_MODEL: str = _deepseek.get("model", "deepseek-chat")
+    LLM_TEMPERATURE: float = float(_deepseek.get("temperature", 0.1))
+    LLM_MAX_TOKENS: int = int(_deepseek.get("max_tokens", 1024))
 
     # --- Chroma ---
     CHROMA_PERSIST_DIR: str = os.getenv(
@@ -36,8 +59,10 @@ class Config:
 
     @classmethod
     def validate(cls) -> list[str]:
-        """校验必要配置是否齐全，返回缺失项列表"""
+        """校验必要配置是否齐全"""
         errors = []
         if not cls.DEEPSEEK_API_KEY:
-            errors.append("DEEPSEEK_API_KEY 未设置 — 请在系统环境变量中配置")
+            errors.append(
+                f"DEEPSEEK_API_KEY 未设置 — 请在 {_CONFIG_FILE} 中配置 api_key"
+            )
         return errors
