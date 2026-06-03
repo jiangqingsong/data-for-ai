@@ -8,9 +8,13 @@
 
 **项目一执行中** — RAG 知识库问答系统（3周计划）
 
+**当前进度:** 技术方案 ✅ → 实施计划 ✅ → 待执行 Task 1
+
 ## 关键文档
 
-- 转型计划: `docs/superpowers/specs/2026-06-02-career-ai-data-engineering-plan.md`
+- 转型计划: `docs/2026-06-02-career-ai-data-engineering-plan.md`
+- 技术方案: `docs/superpowers/specs/2026-06-03-rag-knowledge-qa-design.md`
+- 实施计划: `docs/superpowers/plans/2026-06-03-rag-knowledge-qa-plan.md`
 
 ## 👤 用户信息（跨设备同步）
 
@@ -40,7 +44,7 @@
 
 | 优先级 | 项目 | 周期 | 状态 |
 |--------|------|------|------|
-| 🔴 当前 | **项目一：RAG 知识库问答系统** | 3周 | ⏳ 准备启动 |
+| 🔴 当前 | **项目一：RAG 知识库问答系统** | 3周 | 🟢 第1周执行中 |
 | 🟡 后续 | **项目二：ExamAI AI数据工程改造版** | 2-3月 | ⏸️ 待项目一完成 |
 
 ### 时间投入
@@ -82,4 +86,4 @@
 
 ---
 
-> **下次新 Session 直接说"继续推进项目一"或"开始 RAG 项目"。**
+> **下次新 Session 直接说"继续执行项目一 Task N"或"看实施计划，从 Task N 开始"。**
