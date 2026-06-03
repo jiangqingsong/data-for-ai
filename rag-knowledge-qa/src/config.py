@@ -28,6 +28,7 @@ def _load_secret_config() -> dict:
 
 _secret = _load_secret_config()
 _deepseek = _secret.get("deepseek", {})
+_embedding = _secret.get("embedding", {})
 
 
 class Config:
@@ -36,13 +37,17 @@ class Config:
     # --- DeepSeek API (火山引擎) ---
     DEEPSEEK_API_KEY: str = _deepseek.get("api_key", "")
     DEEPSEEK_BASE_URL: str = _deepseek.get(
-        "base_url", "https://ark.cn-beijing.volces.com/api/compatible"
+        "base_url", "https://ark.cn-beijing.volces.com/api/v3"
     )
 
     # --- LLM ---
     LLM_MODEL: str = _deepseek.get("model", "deepseek-chat")
     LLM_TEMPERATURE: float = float(_deepseek.get("temperature", 0.1))
     LLM_MAX_TOKENS: int = int(_deepseek.get("max_tokens", 1024))
+
+    # --- Embedding ---
+    EMBEDDING_PROVIDER: str = _embedding.get("provider", "local")
+    EMBEDDING_MODEL: str = _embedding.get("model", "BAAI/bge-m3")
 
     # --- Chroma ---
     CHROMA_PERSIST_DIR: str = os.getenv(
