@@ -61,3 +61,68 @@ def test_clean_documents_preserves_metadata():
     cleaned = clean_documents(docs)
     assert cleaned[0].metadata["source"] == "test.pdf"
     assert cleaned[0].metadata["page"] == 1
+
+
+# ============================================================
+# Task 3: 分块和向量化测试
+# ============================================================
+
+from src.pipeline import split_documents, build_vectorstore
+
+
+def test_split_documents_chunk_size():
+    """分块后每个块不应超过 chunk_size + overlap"""
+    from langchain_core.documents import Document
+
+    long_text = "测试内容。" * 500  # 约 3000 字符
+    docs = [Document(page_content=long_text, metadata={"source": "test.pdf"})]
+
+    chunks = split_documents(docs, chunk_size=500, chunk_overlap=100)
+    assert len(chunks) > 1  # 应该被切成多块
+    for chunk in chunks:
+        # chunk_size 是近似值，允许一定容差
+        assert len(chunk.page_content) <= 600  # 500 + 100 overlap 容差
+
+
+def test_split_documents_preserves_metadata():
+    """分块后元数据应保留"""
+    from langchain_core.documents import Document
+
+    docs = [
+        Document(
+            page_content="测试内容。" * 100,
+            metadata={"source": "物理教材.pdf", "page": 3},
+        )
+    ]
+    chunks = split_documents(docs, chunk_size=200, chunk_overlap=50)
+    for chunk in chunks:
+        assert chunk.metadata["source"] == "物理教材.pdf"
+        assert chunk.metadata["page"] == 3
+
+
+def test_build_vectorstore_creates_persist_dir():
+    """向量化存储应创建持久化目录"""
+    import tempfile
+    import shutil
+    from langchain_core.documents import Document
+
+    tmpdir = tempfile.mkdtemp()
+    try:
+        docs = [
+            Document(
+                page_content="牛顿第一定律：任何物体都要保持匀速直线运动或静止状态。",
+                metadata={"source": "物理.pdf", "page": 1},
+            )
+        ]
+        vectorstore = build_vectorstore(
+            docs,
+            persist_dir=tmpdir,
+            use_deepseek_embedding=False,
+        )
+        assert vectorstore is not None
+        assert len(os.listdir(tmpdir)) > 0
+    except (OSError, RuntimeError):
+        import pytest
+        pytest.skip("HuggingFace 不可用（网络限制），跳过向量化测试")
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
