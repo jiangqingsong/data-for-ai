@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+env/
+
+# Data
+data/pdfs/
+data/chroma_db/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Notebooks
+notebooks/.ipynb_checkpoints/
