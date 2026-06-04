@@ -108,9 +108,9 @@ def main():
                 meta = sample["metadatas"][idx]
                 src = meta.get("source", "?")
                 page = meta.get("page", "?")
-                text = doc[:100].replace("\n", " ")
+                text = doc.replace("\n", "\n    ")
                 print(f"[{i}] {src} | page {page}")
-                print(f"    {text}...")
+                print(f"    {text}")
                 print()
 
         # --- page ---
@@ -132,9 +132,11 @@ def main():
                 print(f"No chunks found on page {page_num}")
             else:
                 print(f"Page {page_num}: {len(found)} chunk(s)")
+                print("-" * 50)
                 for j, (doc, meta) in enumerate(found, 1):
-                    text = doc[:150].replace("\n", " ")
-                    print(f"  [{j}] {text}...")
+                    text = doc.replace("\n", "\n  ")
+                    print(f"  [{j}] {text}")
+                    print()
             print()
 
         # --- search ---
@@ -168,9 +170,9 @@ def _print_results(results, method, query):
     for i, doc in enumerate(results, 1):
         src = doc.metadata.get("source", "?")
         page = doc.metadata.get("page", "?")
-        text = doc.page_content[:150].replace("\n", " ")
+        text = doc.page_content.replace("\n", "\n      ")
         print(f"  [{i}] {src}  p.{page}")
-        print(f"      {text}...")
+        print(f"      {text}")
         print()
 
 
