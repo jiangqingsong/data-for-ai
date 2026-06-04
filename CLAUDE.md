@@ -8,7 +8,21 @@
 
 **项目一执行中** — RAG 知识库问答系统（3周计划）
 
-**当前进度:** 技术方案 ✅ → 实施计划 ✅ → 待执行 Task 1
+**当前进度:** Task 1 ✅ → Task 2 ✅ → Task 3 ✅ → Task 4 ✅ → 下一步 Task 5（生成器）
+
+**已完成:**
+- Task 1: 项目初始化（目录/配置/依赖）
+- Task 2: PDF 加载与文本清洗 (pipeline.py)
+- Task 3: 文档分块与 Chroma 向量化
+- Task 4: 检索器 (retriever.py — similarity_search / mmr_search)
+- Embedding 切换: 本地 BGE-M3 → 火山引擎 `doubao-embedding-text-240715` (2560维)
+- 工具: explore.py 交互式 Chroma 向量库探索
+
+**向量库现状:**
+- 数据库: Chroma 本地持久化 (`data/chroma_db/`)
+- 数据: `9年级物理-电子课本.pdf` → 188页 → 189个chunk
+- Embedding: 火山引擎 doubao-embedding-text-240715, 2560维
+- 探索工具: `.venv/Scripts/python explore.py` (search/mmr/stats/sample/page)
 
 ## 关键文档
 
@@ -75,14 +89,33 @@
 
 ### 两台电脑协作
 
-- 公司电脑 + 家用电脑，通过 GitHub 同步
+- 公司电脑 (Windows) + 家用电脑 (Mac)，通过 GitHub 同步
 - **CLAUDE.md 是唯一的跨设备上下文文件**
 - 新电脑：`git clone git@github.com:jiangqingsong/ExamAI.git`
+
+**换电脑 setup checklist:**
+1. `git pull` 拉代码
+2. `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+3. 创建 `~/.ai-env/llm/config.json`（敏感配置，跨平台统一路径）
+4. 拷贝 PDF 到 `data/pdfs/`
+5. 重建向量库: `python -m src.pipeline`
+6. Mac 上运行: `python explore.py` (非 `.venv/Scripts/python`)
 
 ## Git
 
 - 仓库: `git@github.com:jiangqingsong/ExamAI.git`
 - 分支: `main`
+
+## 技术环境
+
+- **LLM:** 火山引擎 DeepSeek V4 (`deepseek-v4-pro-260425`), base_url: `https://ark.cn-beijing.volces.com/api/v3`
+- **Embedding:** 火山引擎 `doubao-embedding-text-240715` (2560维, OpenAI 兼容接口, 需 `tiktoken_enabled=False`)
+- **向量库:** Chroma 本地持久化, 数据不入 Git
+- **敏感配置:** `~/.ai-env/llm/config.json` (跨平台, 项目外, 不入库)
+- **Shell:** Windows 用 Git Bash, Mac 用 zsh
+- **Python:** 必须用项目 `.venv/` 下的 Python, 不能用系统 `python3` (Windows Store 假 Python)
+
+> Claude Code 推荐使用终端版 (PowerShell/Git Bash), VS Code 插件版在 Windows 上容易中断长任务。
 
 ---
 
