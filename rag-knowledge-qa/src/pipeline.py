@@ -100,34 +100,31 @@ def split_documents(
 def build_vectorstore(
     docs: List[Document],
     persist_dir: str = "./data/chroma_db",
-    use_deepseek_embedding: bool = False,
-    embedding_model: str = "text-embedding-3-small",
+    embedding_model: str | None = None,
 ) -> Chroma:
     """将文档向量化并存入 Chroma
 
     Args:
         docs: 待向量化的文档列表
         persist_dir: Chroma 持久化目录
-        use_deepseek_embedding: True=API Embedding, False=BGE-M3 本地
-        embedding_model: API Embedding 模型名（仅 API 模式）
+        embedding_model: None=自动读取 Config, 或手动指定模型名
 
     Returns:
         Chroma vectorstore 实例
     """
-    if use_deepseek_embedding:
-        from langchain_openai import OpenAIEmbeddings
-        from src.config import Config
-        embeddings = OpenAIEmbeddings(
-            model=embedding_model,
-            openai_api_key=Config.DEEPSEEK_API_KEY,
-            openai_api_base=Config.DEEPSEEK_BASE_URL,
-        )
-    else:
-        from langchain_huggingface import HuggingFaceEmbeddings
-        embeddings = HuggingFaceEmbeddings(
-            model_name="BAAI/bge-m3",
-            model_kwargs={"device": "cpu"},
-        )
+    from src.config import Config
+    from langchain_openai import OpenAIEmbeddings
+
+    if embedding_model is None:
+        embedding_model = Config.EMBEDDING_API_MODEL
+
+    embeddings = OpenAIEmbeddings(
+        model=embedding_model,
+        openai_api_key=Config.DEEPSEEK_API_KEY,
+        openai_api_base=Config.DEEPSEEK_BASE_URL,
+        tiktoken_enabled=False,  # 火山引擎 API 不接受 token IDs，传原始文本
+        check_embedding_ctx_length=False,
+    )
 
     vectorstore = Chroma.from_documents(
         documents=docs,
@@ -143,7 +140,6 @@ def run_pipeline(
     persist_dir: str = "./data/chroma_db",
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
-    use_deepseek_embedding: bool = False,
 ) -> Chroma:
     """一键执行完整的数据 Pipeline
 
@@ -170,7 +166,7 @@ def run_pipeline(
     # 4. 向量化
     print(f"\n[4/4] 向量化存储...")
     vectorstore = build_vectorstore(
-        chunks, persist_dir, use_deepseek_embedding
+        chunks, persist_dir
     )
 
     print("\n" + "=" * 50)

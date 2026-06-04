@@ -45,20 +45,8 @@ class Config:
     LLM_TEMPERATURE: float = float(_deepseek.get("temperature", 0.1))
     LLM_MAX_TOKENS: int = int(_deepseek.get("max_tokens", 1024))
 
-    # --- Embedding ---
-    # provider: "local" = 本地 BGE-M3 / "api" = 火山引擎 API
-    EMBEDDING_PROVIDER: str = _embedding.get("provider", "local")
-    EMBEDDING_MODEL: str = _embedding.get("model", "BAAI/bge-m3")
+    # --- Embedding (火山引擎 API) ---
     EMBEDDING_API_MODEL: str = _embedding.get("api_model", "")
-
-    @classmethod
-    def use_api_embedding(cls) -> bool:
-        """是否使用 API Embedding（provider=api 且 model 已配置）"""
-        return (
-            cls.EMBEDDING_PROVIDER == "api"
-            and bool(cls.EMBEDDING_API_MODEL)
-            and cls.EMBEDDING_API_MODEL != "待填入火山引擎 Embedding 模型名"
-        )
 
     # --- Chroma ---
     CHROMA_PERSIST_DIR: str = os.getenv(

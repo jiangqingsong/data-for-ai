@@ -117,7 +117,6 @@ def test_build_vectorstore_creates_persist_dir():
         vectorstore = build_vectorstore(
             docs,
             persist_dir=tmpdir,
-            use_deepseek_embedding=False,
         )
         assert vectorstore is not None
         assert len(os.listdir(tmpdir)) > 0
