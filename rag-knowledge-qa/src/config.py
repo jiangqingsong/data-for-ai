@@ -1,18 +1,31 @@
-"""配置管理模块 — 从 E:/AI-env/llm/config.json 读取敏感信息
+"""配置管理模块 — 从外部配置文件读取敏感信息
 
 所有 API Key、URL 等敏感配置统一管理在项目外部的配置文件中，
 不随代码入库，多项目共享。
 
-配置文件位置: E:/AI-env/llm/config.json
+配置文件查找顺序:
+  1. ~/.ai-env/llm/config.json   (跨平台推荐)
+  2. E:/AI-env/llm/config.json   (Windows 旧路径兼容)
 """
 import json
 import os
 from pathlib import Path
 
 
-# 统一配置文件路径（多项目共享）
-_CONFIG_DIR = Path("E:/AI-env/llm")
-_CONFIG_FILE = _CONFIG_DIR / "config.json"
+def _find_config_file() -> Path | None:
+    """按优先级查找配置文件，返回第一个存在的路径"""
+    candidates = [
+        Path.home() / ".ai-env" / "llm" / "config.json",   # ~/.ai-env/llm/config.json
+        Path("E:/AI-env/llm/config.json"),                  # Windows 旧路径
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    # 都不存在时返回推荐路径（方便后续创建）
+    return candidates[0]
+
+
+_CONFIG_FILE = _find_config_file()
 
 
 def _load_secret_config() -> dict:
