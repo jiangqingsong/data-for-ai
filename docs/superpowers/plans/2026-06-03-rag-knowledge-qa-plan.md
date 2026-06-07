@@ -1648,7 +1648,9 @@ git commit -m "feat: 高级分块策略 — 语义/结构/小2大 + 对比实验
 
 ---
 
-### Task 9: 检索策略扩展 — MMR + 对比实验
+### Task 9: 检索策略扩展 — MMR + 对比实验 ✅
+
+> **状态:** 已完成 (2026-06-07) | **提交:** `9f53c88`
 
 **Files:**
 - Modify: `rag-knowledge-qa/src/retriever.py` (retriever.py 已在 Task 4 包含了 MMR，此 Task 加对比实验函数)
@@ -1701,7 +1703,9 @@ git commit -m "feat: 检索策略对比实验函数"
 
 ---
 
-### Task 10: RAGAS 评估体系
+### Task 10: RAGAS 评估体系 ✅
+
+> **状态:** 已完成 (2026-06-07) | **提交:** `a5eb600` | ⚠️ 待你运行评估
 
 **Files:**
 - Create: `rag-knowledge-qa/src/evaluator.py`
@@ -2104,7 +2108,9 @@ git commit -m "feat: 第2周优化迭代 — 基线评估 + 对比实验"
 
 ---
 
-### Task 12: 第2周收尾 — 知识点文档
+### Task 12: 第2周收尾 — 知识点文档 ✅
+
+> **状态:** 已完成 (2026-06-07) | **提交:** `f923510`
 
 **Files:**
 - Create: `rag-knowledge-qa/docs/knowledge/04-retrieval-strategies.md`
