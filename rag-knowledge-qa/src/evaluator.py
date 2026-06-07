@@ -127,20 +127,35 @@ class RAGEvaluator:
             embeddings=self.embeddings,
         )
 
-        # 提取分数
+        # 提取分数（兼容 ragas 0.4.3+ 返回 EvaluationResult 对象）
         result = {}
-        for metric_name in ["faithfulness", "answer_relevancy",
-                            "context_recall", "context_precision"]:
-            if metric_name in scores:
-                result[metric_name] = round(
-                    float(scores[metric_name]), 4
-                )
+        # scores 是 EvaluationResult 对象，支持 to_pandas()
+        if hasattr(scores, 'to_pandas'):
+            df = scores.to_pandas()
+            for metric_name in ["faithfulness", "answer_relevancy",
+                                "context_recall", "context_precision"]:
+                if metric_name in df.columns:
+                    result[metric_name] = round(
+                        float(df[metric_name].mean()), 4
+                    )
+        elif isinstance(scores, dict):
+            for metric_name in ["faithfulness", "answer_relevancy",
+                                "context_recall", "context_precision"]:
+                if metric_name in scores:
+                    result[metric_name] = round(
+                        float(scores[metric_name]), 4
+                    )
+        else:
+            # Fallback: 尝试迭代对象
+            for metric_name in ["faithfulness", "answer_relevancy",
+                                "context_recall", "context_precision"]:
+                try:
+                    val = scores[metric_name]
+                    result[metric_name] = round(float(val), 4)
+                except (KeyError, TypeError, IndexError):
+                    pass
 
         result["eval_data"] = eval_data
-        result["_raw_scores"] = {
-            k: float(v) for k, v in scores.items()
-            if k != "eval_data"
-        }
         return result
 
     def print_report(self, scores: Dict[str, Any]) -> None:

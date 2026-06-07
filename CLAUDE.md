@@ -22,7 +22,13 @@
 - 工具: explore.py 交互式 Chroma 向量库探索
 - 测试: 26 个测试全部通过
 
-**向量库现状:**
+**RAGAS 基线分数 (top_k=4):**
+| 指标 | 分数 | 说明 |
+|------|------|------|
+| Faithfulness | 0.9375 | 优秀，答案高度忠实于上下文 |
+| Answer Relevancy | 0.9083 | 优秀，答案切题 |
+| Context Recall | 0.2375 | ⚠️ 较弱，检索覆盖不足 |
+| Context Precision | 0.7875 | 中等偏上 |
 - 数据库: Chroma 本地持久化 (`data/chroma_db/`)
 - 数据: `9年级物理-电子课本.pdf` → 188页 → 189个chunk
 - Embedding: 火山引擎 doubao-embedding-text-240715, 2560维
