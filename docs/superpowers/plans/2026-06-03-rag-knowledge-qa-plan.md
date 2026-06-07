@@ -2049,7 +2049,9 @@ git commit -m "feat: RAGAS 评估体系 — 4指标 + 20题测试集"
 
 ---
 
-### Task 11: 第2周优化迭代
+### Task 11: 第2周优化迭代 ✅
+
+> **状态:** 已完成 (2026-06-07) | 基线评估跑通，4 指标分数已记录
 
 **Files:**
 - Create: `rag-knowledge-qa/notebooks/experiments.ipynb`
