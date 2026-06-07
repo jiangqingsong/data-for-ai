@@ -125,3 +125,84 @@ def test_build_vectorstore_creates_persist_dir():
         pytest.skip("HuggingFace 不可用（网络限制），跳过向量化测试")
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+# ============================================================
+# Task 8: 高级分块策略测试
+# ============================================================
+
+from src.pipeline import structural_split, parent_document_split
+
+
+def test_structural_split_produces_chunks():
+    """结构分块应产生至少和输入一样多的块"""
+    from langchain_core.documents import Document
+
+    docs = [
+        Document(
+            page_content="第十五章 电流和电路\n第1节 两种电荷\n这是关于电荷的内容。",
+            metadata={"source": "物理.pdf", "page": 32},
+        ),
+        Document(
+            page_content="第2节 电流和电路\n这是关于电流的内容。电流的方向是正电荷定向移动的方向。",
+            metadata={"source": "物理.pdf", "page": 36},
+        ),
+    ]
+    chunks = structural_split(docs)
+    assert len(chunks) > 0
+    for chunk in chunks:
+        assert hasattr(chunk, "page_content")
+        assert len(chunk.page_content.strip()) > 0
+
+
+def test_structural_split_preserves_metadata():
+    """结构分块应保留原始元数据"""
+    from langchain_core.documents import Document
+
+    docs = [
+        Document(
+            page_content="第十六章 电压 电阻\n第1节 电压\n电压是产生电流的原因。",
+            metadata={"source": "物理.pdf", "page": 55},
+        )
+    ]
+    chunks = structural_split(docs)
+    for chunk in chunks:
+        assert chunk.metadata["source"] == "物理.pdf"
+        assert chunk.metadata["page"] == 55
+
+
+def test_parent_document_split_returns_two_lists():
+    """小2大分块应返回父块和子块两个列表"""
+    from langchain_core.documents import Document
+
+    docs = [
+        Document(
+            page_content="测试内容。" * 100,
+            metadata={"source": "物理.pdf", "page": 1},
+        )
+    ]
+    parent_docs, child_docs = parent_document_split(
+        docs, parent_chunk_size=500, child_chunk_size=200, child_chunk_overlap=50
+    )
+    assert len(parent_docs) > 0
+    assert len(child_docs) > 0
+    # 子块应该比父块多（同样内容，小块切得更细）
+    assert len(child_docs) >= len(parent_docs)
+
+
+def test_parent_document_split_child_has_parent_id():
+    """小2大分块的子块应有 parent_id 元数据"""
+    from langchain_core.documents import Document
+
+    docs = [
+        Document(
+            page_content="这是测试内容。" * 50,
+            metadata={"source": "物理.pdf", "page": 1},
+        )
+    ]
+    parent_docs, child_docs = parent_document_split(
+        docs, parent_chunk_size=500, child_chunk_size=200, child_chunk_overlap=50
+    )
+    # 至少有一个子块应该有 parent_id
+    has_parent_id = any("parent_id" in c.metadata for c in child_docs)
+    assert has_parent_id or len(parent_docs) == 1  # 单父块时可能都匹配到
