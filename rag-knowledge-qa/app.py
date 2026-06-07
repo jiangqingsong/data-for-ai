@@ -55,13 +55,17 @@ def ask_question(
     # 构建回答文本
     answer = result["answer"]
 
-    # 追加引用来源
-    if result["sources"]:
-        answer += "\n\n---\n📚 **参考来源:**\n"
-        for i, src in enumerate(result["sources"], 1):
+    # 追加引用来源（可点击展开查看原文）
+    if result["context_docs"]:
+        answer += "\n\n---\n📚 **参考来源（点击展开查看原文）:**\n"
+        for i, doc in enumerate(result["context_docs"], 1):
+            source = doc.metadata.get("source", "未知")
+            page = doc.metadata.get("page", "?")
+            content = doc.page_content.replace("\n", "<br>")
             answer += (
-                f"\n[{i}] **{src['source']}**"
-                f" (第{src['page']}页)"
+                f'\n<details><summary><b>[{i}] {source} (第{page}页)</b></summary>\n\n'
+                f'{content}\n'
+                f'</details>\n'
             )
 
     return answer

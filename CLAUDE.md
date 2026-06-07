@@ -8,18 +8,13 @@
 
 **项目一执行中** — RAG 知识库问答系统（3周计划）
 
-**当前进度:** Task 1-10 ✅ → Task 11 ⏸️ (等你跑评估) → Task 12 ✅
+**当前进度:** Task 1-15 ✅ → 🎉 三周计划完成！
 
-**第1周 MVP 已完成** 🎉  **第2周代码全部完成，等你跑 RAGAS 基线评估**
-
-**已完成:**
-- Task 1-7: 第1周 MVP（项目初始化 / Pipeline / 检索器 / 生成器 / RAG Chain / 知识点文档 ×4）
-- Task 8: 高级分块策略（语义/结构/小2大 + 对比实验）
-- Task 9: 检索策略对比实验 (similarity vs MMR)
-- Task 10: RAGAS 评估体系（evaluator + 20题测试集）
-- Task 12: 第2周知识点文档 (04/06)
-- Embedding: 火山引擎 `doubao-embedding-text-240715` (2560维)
-- 工具: explore.py 交互式 Chroma 向量库探索
+**已全部完成:**
+- 第1周: Task 1-7 MVP（Pipeline / 检索器 / 生成器 / RAG Chain / 知识点 ×4）
+- 第2周: Task 8-12 优化（高级分块 / 检索对比 / RAGAS 评估 / 知识点 ×2）
+- 第3周: Task 13-15 产品化（Gradio Web UI / 多轮对话 / README / 知识点 ×1）
+- 启动: `python app.py` → http://localhost:7860
 - 测试: 26 个测试全部通过
 
 **RAGAS 基线分数 (top_k=4):**
