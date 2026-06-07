@@ -106,3 +106,72 @@ class Generator:
             "sources": sources,
             "prompt": prompt,
         }
+
+    def generate_with_history(
+        self,
+        question: str,
+        context_docs: List[Document],
+        chat_history: List[Dict[str, str]] | None = None,
+        max_history_turns: int = 5,
+    ) -> Dict[str, Any]:
+        """多轮对话生成 — 结合对话历史理解用户意图
+
+        Args:
+            question: 当前问题
+            context_docs: 检索到的文档块
+            chat_history: [{"role": "user/assistant", "content": "..."}, ...]
+            max_history_turns: 最多保留最近 N 轮对话
+
+        Returns:
+            同 generate()
+        """
+        chat_history = chat_history or []
+
+        # 只保留最近 N 轮
+        recent = chat_history[-(max_history_turns * 2):]
+
+        # 格式化对话历史
+        history_text = ""
+        for msg in recent:
+            role = "👤 用户" if msg["role"] == "user" else "🤖 助手"
+            history_text += f"{role}: {msg['content']}\n"
+
+        if not history_text:
+            history_text = "（无历史对话）"
+
+        context = format_docs(context_docs)
+        system_part = CONVERSATION_SYSTEM_PROMPT.format(context=context)
+        user_part = CONVERSATION_USER_PROMPT.format(
+            chat_history=history_text, question=question
+        )
+        prompt = system_part + "\n\n" + user_part
+
+        response = self.llm.invoke(prompt)
+        sources = self._extract_sources(context_docs)
+
+        return {
+            "answer": response.content,
+            "sources": sources,
+            "prompt": prompt,
+        }
+
+
+# === 多轮对话 Prompt ===
+
+CONVERSATION_SYSTEM_PROMPT = """你是初中学科知识问答助手。请严格基于以下参考资料回答问题。
+
+规则：
+1. 如果资料中包含答案，准确引用并注明来源
+2. 如果资料中不包含答案，请明确说"参考资料中未找到相关信息"
+3. 回答要简洁清晰，适合初中生理解
+4. 注意结合对话历史理解用户意图（如追问、指代等）
+
+参考资料：
+{context}"""
+
+CONVERSATION_USER_PROMPT = """对话历史：
+{chat_history}
+
+当前问题：{question}
+
+请基于对话上下文和参考资料回答。"""
