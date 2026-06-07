@@ -96,3 +96,69 @@ class Retriever:
             search_type=search_type,
             search_kwargs=search_kwargs,
         )
+
+
+# ============================================================
+# Task 9: 检索策略对比实验
+# ============================================================
+
+def run_retrieval_comparison(
+    retriever: "Retriever",
+    queries: List[str],
+    top_k: int = 4,
+) -> list[dict]:
+    """检索策略对比实验 — 同一批查询用相似度 vs MMR，记录结果
+
+    Args:
+        retriever: Retriever 实例
+        queries: 测试问题列表
+        top_k: 检索数量
+
+    Returns:
+        [{"query": str, "similarity": [...], "mmr": [...], "overlap": int}, ...]
+    """
+    results = []
+    for query in queries:
+        sim_results = retriever.similarity_search(query, top_k=top_k)
+        mmr_results = retriever.mmr_search(query, top_k=top_k)
+
+        # 计算两个策略的页面重叠数
+        sim_pages = {doc.metadata.get("page") for doc in sim_results}
+        mmr_pages = {doc.metadata.get("page") for doc in mmr_results}
+        overlap = len(sim_pages & mmr_pages)
+
+        results.append({
+            "query": query,
+            "similarity": [
+                {
+                    "content": doc.page_content[:100],
+                    "source": doc.metadata.get("source"),
+                    "page": doc.metadata.get("page"),
+                }
+                for doc in sim_results
+            ],
+            "mmr": [
+                {
+                    "content": doc.page_content[:100],
+                    "source": doc.metadata.get("source"),
+                    "page": doc.metadata.get("page"),
+                }
+                for doc in mmr_results
+            ],
+            "overlap_pages": overlap,
+        })
+
+    # 打印对比汇总
+    print("\n" + "=" * 55)
+    print("检索策略对比: Similarity vs MMR")
+    print("=" * 55)
+    for r in results:
+        sim_pages = [s["page"] for s in r["similarity"]]
+        mmr_pages = [s["page"] for s in r["mmr"]]
+        print(f"\n  查询: {r['query'][:40]}")
+        print(f"  Similarity 页面: {sim_pages}")
+        print(f"  MMR 页面:        {mmr_pages}")
+        print(f"  重叠页面数:      {r['overlap_pages']}/{top_k}")
+    print("=" * 55)
+
+    return results
