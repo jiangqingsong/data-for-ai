@@ -4,11 +4,50 @@
 
 **Goal:** 3 周内从零搭建 RAG 知识库问答系统，覆盖全链路（数据Pipeline→检索→生成→评估→产品化）
 
-**Architecture:** Python + LangChain + Chroma + DeepSeek API，7 个核心源文件，4 个测试文件，1 个 Gradio 入口
+**Architecture:** Python + LangChain + Chroma + 火山引擎 API (LLM + Embedding)，7 个核心源文件，4 个测试文件，1 个 Gradio 入口
 
-**Tech Stack:** LangChain, ChromaDB, DeepSeek API (Chat + Embedding), Unstructured, RAGAS, Gradio
+**Tech Stack:** LangChain, ChromaDB, 火山引擎 (DeepSeek V4 + Doubao Embedding), Unstructured, RAGAS, Gradio
 
 **关联设计文档:** [2026-06-03-rag-knowledge-qa-design.md](../specs/2026-06-03-rag-knowledge-qa-design.md)
+
+---
+
+## ⚠️ 执行偏差记录（2026-06-07 更新）
+
+> 以下记录了实际实现与原始计划的差异。Task 5+ 的代码模板需按实际实现调整，不能直接复制计划中的代码。
+
+### 配置方式变更
+
+| 维度 | 原始计划 | 实际实现 |
+|------|---------|---------|
+| 配置存储 | `.env` 文件 + `python-dotenv` | `~/.ai-env/llm/config.json` (JSON 文件，项目外，多项目共享) |
+| 配置读取 | `os.getenv("DEEPSEEK_API_KEY")` | `Config.DEEPSEEK_API_KEY` (从 JSON 解析) |
+| API 来源 | DeepSeek 官方 (`api.deepseek.com`) | 火山引擎 (`ark.cn-beijing.volces.com`) |
+| LLM 模型 | `deepseek-chat` | `deepseek-v4-pro-260425` |
+| Embedding 模型 | `text-embedding-3-small` / BGE-M3 fallback | `doubao-embedding-text-240715` (2560维, 无 fallback) |
+
+### API 调用模式
+
+- **计划:** `os.getenv()` 直接读环境变量，每次调用传 `openai_api_key` / `openai_api_base`
+- **实际:** 统一通过 `Config` 类，Embedding 调用需 `tiktoken_enabled=False`（火山引擎兼容性要求）
+
+### 接口差异
+
+| 函数/类 | 计划参数 | 实际参数 |
+|---------|---------|---------|
+| `Retriever.__init__` | `use_deepseek_embedding=True`, `embedding_model` | 无这两个参数，直接从 Config 读 |
+| `build_vectorstore` | `use_deepseek_embedding=True`, `embedding_model` | 只保留 `embedding_model=None`（None=读 Config） |
+| `run_pipeline` | `use_deepseek_embedding=True` | 去掉该参数 |
+
+### 新增文件（计划外）
+
+- `explore.py` — Chroma 向量库交互式探索工具 (search/mmr/stats/sample/page)
+
+### 对 Task 5+ 的影响
+
+- `Generator` 中 LLM 调用必须使用 `ChatOpenAI` + 火山引擎 base_url，从 `Config` 读取参数
+- 测试中 mock 方式不变（mock `ChatOpenAI`），但需注意实际调用链走 Config
+- `rag_chain.py` 中 `RAGChain` 初始化不需要传 `use_deepseek_embedding`
 
 ---
 
@@ -44,7 +83,9 @@ rag-knowledge-qa/
 
 ## 第1周：最简 RAG 跑通 (MVP)
 
-### Task 1: 项目初始化与环境搭建
+### Task 1: 项目初始化与环境搭建 ✅
+
+> **状态:** 已完成 (2026-06-03) | **提交:** `446eb7a` feat: 项目初始化
 
 **Files:**
 - Create: `rag-knowledge-qa/.env.example`
@@ -53,7 +94,7 @@ rag-knowledge-qa/
 - Create: `rag-knowledge-qa/src/__init__.py`
 - Create: `rag-knowledge-qa/src/config.py`
 
-- [ ] **Step 1: 创建项目目录结构**
+- [x] **Step 1: 创建项目目录结构**
 
 ```bash
 mkdir -p rag-knowledge-qa/{src,tests,data/pdfs,data/chroma_db,docs/knowledge,notebooks}
@@ -61,7 +102,7 @@ touch rag-knowledge-qa/src/__init__.py
 touch rag-knowledge-qa/tests/__init__.py
 ```
 
-- [ ] **Step 2: 编写 .gitignore**
+- [x] **Step 2: 编写 .gitignore**
 
 ```bash
 cat > rag-knowledge-qa/.gitignore << 'EOF'
@@ -91,7 +132,7 @@ notebooks/.ipynb_checkpoints/
 EOF
 ```
 
-- [ ] **Step 3: 编写 requirements.txt**
+- [x] **Step 3: 编写 requirements.txt**
 
 ```txt
 langchain>=0.3.0
@@ -107,7 +148,7 @@ openai>=1.0.0
 sentence-transformers>=2.7.0
 ```
 
-- [ ] **Step 4: 编写 .env.example**
+- [x] **Step 4: 编写 .env.example**
 
 ```bash
 # DeepSeek API
@@ -128,7 +169,7 @@ CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
 ```
 
-- [ ] **Step 5: 编写 src/config.py**
+- [x] **Step 5: 编写 src/config.py**
 
 ```python
 """配置管理模块 — 统一管理所有环境变量和参数"""
@@ -174,14 +215,14 @@ class Config:
         return errors
 ```
 
-- [ ] **Step 6: 创建 .env 并填入 API Key**
+- [x] **Step 6: 创建 .env 并填入 API Key**
 
 ```bash
 cp rag-knowledge-qa/.env.example rag-knowledge-qa/.env
 echo "⚠️ 请手动编辑 rag-knowledge-qa/.env 填入 DEEPSEEK_API_KEY"
 ```
 
-- [ ] **Step 7: 创建虚拟环境并安装依赖**
+- [x] **Step 7: 创建虚拟环境并安装依赖**
 
 ```bash
 cd rag-knowledge-qa
@@ -190,7 +231,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-- [ ] **Step 8: 验证 DeepSeek API 连通性**
+- [x] **Step 8: 验证 DeepSeek API 连通性**
 
 ```bash
 python3 -c "
@@ -213,7 +254,7 @@ print(r.choices[0].message.content)
 
 预期输出: `API连通成功`
 
-- [ ] **Step 9: 验证 DeepSeek Embedding API 是否可用**
+- [x] **Step 9: 验证 DeepSeek Embedding API 是否可用**
 
 ```bash
 python3 -c "
@@ -238,7 +279,7 @@ except Exception as e:
 "
 ```
 
-- [ ] **Step 10: 提交**
+- [x] **Step 10: 提交**
 
 ```bash
 cd rag-knowledge-qa
@@ -249,7 +290,9 @@ git commit -m "feat: 项目初始化 — 目录结构、配置、依赖"
 
 ---
 
-### Task 2: 数据 Pipeline — PDF 加载与文本清洗
+### Task 2: 数据 Pipeline — PDF 加载与文本清洗 ✅
+
+> **状态:** 已完成 (2026-06-03) | **提交:** `446eb7a` feat: PDF 加载与文本清洗
 
 **Files:**
 - Create: `rag-knowledge-qa/src/pipeline.py`
@@ -419,7 +462,9 @@ git commit -m "feat: PDF 加载与文本清洗 (pipeline.py)"
 
 ---
 
-### Task 3: 数据 Pipeline — 文档分块与向量化存储
+### Task 3: 数据 Pipeline — 文档分块与向量化存储 ✅
+
+> **状态:** 已完成 (2026-06-04) | **提交:** `050b4b5` feat: Chroma 向量库交互式探索工具
 
 **Files:**
 - Modify: `rag-knowledge-qa/src/pipeline.py` (追加函数)
@@ -636,7 +681,9 @@ git commit -m "feat: 文档分块与 Chroma 向量化存储"
 
 ---
 
-### Task 4: 检索器 — 相似度检索
+### Task 4: 检索器 — 相似度检索 ✅
+
+> **状态:** 已完成 (2026-06-05) | **提交:** `446eb7a` feat: 检索器 + 火山引擎 Embedding API 切换
 
 **Files:**
 - Create: `rag-knowledge-qa/src/retriever.py`
@@ -859,7 +906,7 @@ def test_generator_builds_prompt_correctly():
     """生成器应正确组装 Prompt"""
     from langchain_core.documents import Document
 
-    gen = Generator(model="deepseek-chat", temperature=0.1, max_tokens=1024)
+    gen = Generator(model="deepseek-v4-pro-260425", temperature=0.1, max_tokens=1024)
     docs = [
         Document(
             page_content="牛顿第一定律：任何物体都要保持匀速直线运动或静止状态。",
@@ -908,9 +955,10 @@ python3 -m pytest tests/test_generator.py -v
 
 - [ ] **Step 3: 实现 src/generator.py**
 
+> ⚠️ 代码已适配实际 Config 模式（从 `~/.ai-env/llm/config.json` 读取，非 `.env`）。
+
 ```python
 """生成器模块 — Prompt 模板 + LLM 调用"""
-import os
 from typing import List, Dict, Any
 
 from langchain_core.documents import Document
@@ -953,16 +1001,18 @@ class Generator:
 
     def __init__(
         self,
-        model: str = "deepseek-chat",
-        temperature: float = 0.1,
-        max_tokens: int = 1024,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ):
+        from src.config import Config
+
         self.llm = ChatOpenAI(
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            openai_api_key=os.getenv("DEEPSEEK_API_KEY"),
-            openai_api_base=os.getenv("DEEPSEEK_BASE_URL"),
+            model=model or Config.LLM_MODEL,
+            temperature=temperature if temperature is not None else Config.LLM_TEMPERATURE,
+            max_tokens=max_tokens or Config.LLM_MAX_TOKENS,
+            openai_api_key=Config.DEEPSEEK_API_KEY,
+            openai_api_base=Config.DEEPSEEK_BASE_URL,
         )
 
     def _build_prompt(
@@ -1018,6 +1068,7 @@ class Generator:
         }
 ```
 
+
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
@@ -1064,20 +1115,14 @@ class RAGChain:
         self,
         persist_dir: str | None = None,
         top_k: int | None = None,
-        use_deepseek_embedding: bool = True,
     ):
         self.persist_dir = persist_dir or Config.CHROMA_PERSIST_DIR
         self.top_k = top_k or Config.RETRIEVER_TOP_K
 
         self.retriever = Retriever(
             persist_dir=self.persist_dir,
-            use_deepseek_embedding=use_deepseek_embedding,
         )
-        self.generator = Generator(
-            model=Config.LLM_MODEL,
-            temperature=Config.LLM_TEMPERATURE,
-            max_tokens=Config.LLM_MAX_TOKENS,
-        )
+        self.generator = Generator()
 
     def ask(
         self,
