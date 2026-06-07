@@ -70,6 +70,10 @@ class RAGChain:
 
 def main():
     """命令行入口 — 交互式问答"""
+    import sys
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     print("=" * 50)
     print("RAG 知识库问答系统")
     print("=" * 50)
