@@ -12,5 +12,6 @@ pandas>=2.0.0
 openai>=1.0.0
 sentence-transformers>=2.7.0
 langchain-experimental>=0.3.0
+langchain-google-vertexai>=2.0.0
 langchain-huggingface>=0.1.0
 pytest>=8.0.0
