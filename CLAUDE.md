@@ -29,6 +29,8 @@
 | Answer Relevancy | 0.9083 | 优秀，答案切题 |
 | Context Recall | 0.2375 | ⚠️ 较弱，检索覆盖不足 |
 | Context Precision | 0.7875 | 中等偏上 |
+
+> 分析: 检索覆盖是主要瓶颈。top_k=4 常遗漏关键页（如欧姆定律定义在第89页但没被检索到）。下一轮优化方向: top_k → 6 或使用语义分块。
 - 数据库: Chroma 本地持久化 (`data/chroma_db/`)
 - 数据: `9年级物理-电子课本.pdf` → 188页 → 189个chunk
 - Embedding: 火山引擎 doubao-embedding-text-240715, 2560维
