@@ -8,13 +8,18 @@
 
 **项目一执行中** — RAG 知识库问答系统（3周计划）
 
-**当前进度:** Task 1 ✅ → Task 2 ✅ → Task 3 ✅ → Task 4 ✅ → 下一步 Task 5（生成器）
+**当前进度:** Task 1 ✅ → Task 2 ✅ → Task 3 ✅ → Task 4 ✅ → Task 5 ✅ → Task 6 ✅ → Task 7 ✅ → 下一步 Task 8（第2周：高级分块策略）
+
+**第1周 MVP 已完成:** 🎉 命令行可交互式问答，`python -m src.rag_chain`
 
 **已完成:**
 - Task 1: 项目初始化（目录/配置/依赖）
 - Task 2: PDF 加载与文本清洗 (pipeline.py)
 - Task 3: 文档分块与 Chroma 向量化
 - Task 4: 检索器 (retriever.py — similarity_search / mmr_search)
+- Task 5: 生成器 (generator.py — Prompt 模板 + LLM 调用)
+- Task 6: RAG Chain (rag_chain.py — 串联检索+生成, 命令行交互)
+- Task 7: 第1周知识点文档 (01/02/03/05, 4篇)
 - Embedding 切换: 本地 BGE-M3 → 火山引擎 `doubao-embedding-text-240715` (2560维)
 - 工具: explore.py 交互式 Chroma 向量库探索
 
