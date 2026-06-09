@@ -97,6 +97,20 @@ class Retriever:
             search_kwargs=search_kwargs,
         )
 
+    def get_vector_count(self) -> int:
+        """获取向量库中的向量数量
+
+        Returns:
+            向量数量
+        """
+        try:
+            # 获取向量库中的所有文档
+            count = self.vectorstore._collection.count()
+            return count
+        except Exception as e:
+            print(f"获取向量数量失败: {e}")
+            return 0
+
 
 # ============================================================
 # Task 9: 检索策略对比实验

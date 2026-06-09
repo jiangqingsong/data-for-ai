@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 知识库测试页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 70vh;
+            max-height: 800px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-message {
+            text-align: right;
+        }
+
+        .user-message .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+        }
+
+        .ai-message {
+            text-align: left;
+        }
+
+        .ai-message .message-content {
+            background: white;
+            color: #333;
+            margin-right: auto;
+            border: 1px solid #e9ecef;
+        }
+
+        .message-content {
+            display: inline-block;
+            padding: 15px 20px;
+            border-radius: 20px;
+            max-width: 80%;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .message-sources {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            color: #1565c0;
+        }
+
+        .message-sources h4 {
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        .message-sources ul {
+            list-style: none;
+        }
+
+        .message-sources li {
+            margin-bottom: 3px;
+        }
+
+        .input-area {
+            padding: 20px 30px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 1rem;
+            resize: none;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #667eea;
+            font-size: 1rem;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 150px;
+        }
+
+        .control-group label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .control-group select {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .control-group span {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 8px;
+            color: #155724;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #28a745;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .chat-container {
+                height: 80vh;
+            }
+
+            .chat-messages {
+                padding: 20px;
+            }
+
+            .message-content {
+                max-width: 90%;
+            }
+
+            .input-area {
+                padding: 15px 20px;
+            }
+
+            .controls {
+                padding: 15px 20px;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 RAG 知识库问答系统</h1>
+            <p>基于真实的物理知识库，提供精准的问答服务</p>
+        </div>
+
+        <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+                <div class="message ai-message">
+                    <div class="message-content">
+                        <p>你好！我是你的物理知识库助手。有什么物理问题需要我帮助解答吗？</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <label for="topK">检索数量 (Top-K):</label>
+                    <input type="range" id="topK" min="1" max="10" value="4">
+                    <span>当前值: <span id="topKValue">4</span></span>
+                </div>
+                <div class="control-group">
+                    <label for="searchType">检索策略:</label>
+                    <select id="searchType">
+                        <option value="similarity">相似度检索</option>
+                        <option value="mmr">MMR 检索</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <div class="input-container">
+                    <textarea
+                        id="messageInput"
+                        placeholder="请输入你的物理问题..."
+                        rows="3"
+                        maxlength="500">
+                    </textarea>
+                    <button id="sendButton">发送</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span>已连接到 RAG 知识库系统</span>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const topK = document.getElementById('topK');
+        const topKValue = document.getElementById('topKValue');
+        const searchType = document.getElementById('searchType');
+
+        // 更新 Top-K 显示
+        topK.addEventListener('input', () => {
+            topKValue.textContent = topK.value;
+        });
+
+        // 发送消息
+        async function sendMessage() {
+            const question = messageInput.value.trim();
+            if (!question) return;
+
+            // 添加用户消息
+            addMessage(question, 'user');
+            messageInput.value = '';
+            sendButton.disabled = true;
+
+            try {
+                // 添加加载状态
+                const loadingMessage = addMessage('思考中...', 'ai', true);
+
+                // 调用后端 API
+                const response = await fetch('http://localhost:5000/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        top_k: parseInt(topK.value),
+                        search_type: searchType.value,
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                // 移除加载消息
+                chatMessages.removeChild(loadingMessage);
+
+                // 添加 AI 响应
+                addMessage(result.answer, 'ai', false, result.sources);
+
+            } catch (error) {
+                console.error('聊天错误:', error);
+
+                // 移除加载消息
+                const loadingElements = chatMessages.querySelectorAll('.loading-message');
+                loadingElements.forEach(el => chatMessages.removeChild(el));
+
+                // 添加错误消息
+                addMessage(`抱歉，出现了错误: ${error.message}。请稍后重试。`, 'ai');
+            } finally {
+                sendButton.disabled = false;
+            }
+        }
+
+        // 添加消息到聊天界面
+        function addMessage(content, sender, isLoading = false, sources = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+
+            if (isLoading) {
+                messageDiv.classList.add('loading-message');
+                messageDiv.innerHTML = `
+                    <div class="message-content">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <span>${content}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // 格式化内容，支持换行
+                const formattedContent = content.replace(/\n/g, '<br>');
+
+                let messageHTML = `
+                    <div class="message-content">
+                        <p>${formattedContent}</p>
+                    </div>
+                `;
+
+                // 添加来源信息
+                if (sources && sources.length > 0) {
+                    const sourcesHTML = sources.map((source, index) =>
+                        `<li>${index + 1}. ${source.source} (第${source.page}页)</li>`
+                    ).join('');
+
+                    messageHTML += `
+                        <div class="message-sources">
+                            <h4>📚 参考来源:</h4>
+                            <ul>${sourcesHTML}</ul>
+                        </div>
+                    `;
+                }
+
+                messageDiv.innerHTML = messageHTML;
+            }
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            return messageDiv;
+        }
+
+        // 事件监听
+        sendButton.addEventListener('click', sendMessage);
+
+        messageInput.addEventListener('keydown', (e) => {
+            // Ctrl+Enter 发送消息
+            if (e.ctrlKey && e.key === 'Enter') {
+                sendMessage();
+            }
+            // Shift+Enter 换行
+            else if (e.shiftKey && e.key === 'Enter') {
+                e.preventDefault();
+                const cursorPos = messageInput.selectionStart;
+                const text = messageInput.value;
+                messageInput.value =
+                    text.substring(0, cursorPos) + '\n' + text.substring(cursorPos);
+                messageInput.selectionStart = messageInput.selectionEnd = cursorPos + 1;
+            }
+        });
+
+        // 检查 API 连接
+        async function checkAPI() {
+            try {
+                const response = await fetch('http://localhost:5000/api/health');
+                if (!response.ok) {
+                    throw new Error('API 连接失败');
+                }
+                return true;
+            } catch (error) {
+                console.error('API 检查失败:', error);
+                const statusIndicator = document.querySelector('.status-indicator');
+                statusIndicator.innerHTML = `
+                    <div class="status-dot" style="background: #dc3545;"></div>
+                    <span style="color: #dc3545;">API 连接失败，请检查后端服务</span>
+                `;
+                statusIndicator.style.background = '#f8d7da';
+                statusIndicator.style.borderColor = '#f5c6cb';
+                return false;
+            }
+        }
+
+        // 页面加载完成后检查 API
+        window.addEventListener('load', checkAPI);
+    </script>
+</body>
+</html>
