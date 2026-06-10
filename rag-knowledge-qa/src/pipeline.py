@@ -101,13 +101,18 @@ def build_vectorstore(
     docs: List[Document],
     persist_dir: str = "./data/chroma_db",
     embedding_model: str | None = None,
+    batch_size: int = 100,
 ) -> Chroma:
-    """将文档向量化并存入 Chroma
+    """将文档向量化并分批存入 Chroma
+
+    火山引擎 Embedding API 限制每次最多 256 条输入，
+    因此需要分批处理。
 
     Args:
         docs: 待向量化的文档列表
         persist_dir: Chroma 持久化目录
         embedding_model: None=自动读取 Config, 或手动指定模型名
+        batch_size: 每批处理的文档数（默认100，最大256）
 
     Returns:
         Chroma vectorstore 实例
@@ -122,16 +127,31 @@ def build_vectorstore(
         model=embedding_model,
         openai_api_key=Config.DEEPSEEK_API_KEY,
         openai_api_base=Config.DEEPSEEK_BASE_URL,
-        tiktoken_enabled=False,  # 火山引擎 API 不接受 token IDs，传原始文本
+        tiktoken_enabled=False,
         check_embedding_ctx_length=False,
     )
 
-    vectorstore = Chroma.from_documents(
-        documents=docs,
-        embedding=embeddings,
-        persist_directory=persist_dir,
-    )
-    print(f"向量化完成: {len(docs)} 个块 → Chroma ({persist_dir})")
+    # 分批处理：先创建空 Chroma，再逐批添加
+    total = len(docs)
+    vectorstore = None
+
+    for i in range(0, total, batch_size):
+        batch = docs[i : i + batch_size]
+        batch_end = min(i + batch_size, total)
+        print(f"  向量化批次 [{i+1}-{batch_end}] / {total}...")
+
+        if vectorstore is None:
+            # 第一批：创建 Chroma 并写入
+            vectorstore = Chroma.from_documents(
+                documents=batch,
+                embedding=embeddings,
+                persist_directory=persist_dir,
+            )
+        else:
+            # 后续批次：追加
+            vectorstore.add_documents(batch)
+
+    print(f"向量化完成: {total} 个块 → Chroma ({persist_dir})")
     return vectorstore
 
 

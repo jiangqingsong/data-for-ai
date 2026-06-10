@@ -182,9 +182,10 @@ async def download_pdf(filename: str):
             raise HTTPException(status_code=400, detail="非法的文件名")
 
         # 处理可能的编码问题
+        # 文件名编码处理
         try:
             filename = filename.encode('latin1').decode('utf-8')
-        except:
+        except (UnicodeDecodeError, UnicodeEncodeError):
             pass
 
         # 替换文件名中的特殊字符
@@ -227,6 +228,11 @@ async def download_pdf(filename: str):
             media_type="application/pdf"
         )
 
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"下载文件失败: {str(e)}")
+
 
 @app.get("/api/test-pdf-path")
 async def test_pdf_path(filename: str):
@@ -268,7 +274,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "app_api:app",
         host="0.0.0.0",
-        port=5000,
+        port=8000,
         reload=True,
         reload_dirs=["src", "."]
     )
