@@ -46,14 +46,14 @@ pip install -r requirements.txt
 ### 4. 构建知识库
 
 ```bash
-python -m src.pipeline
+cd backend && python -m src.pipeline
 ```
 
 ### 5. 启动服务
 
 **启动后端 (FastAPI, 端口 8000):**
 ```bash
-python app_api.py
+cd backend && python app_api.py
 ```
 
 **启动前端 (React + Vite, 端口 5173):**
@@ -64,19 +64,24 @@ cd frontend && npm install && npm run dev
 
 **命令行模式:**
 ```bash
-python -m src.rag_chain
+cd backend && python -m src.rag_chain
 ```
 
 ## 项目结构
 
 ```
-├── src/
-│   ├── config.py          # 配置管理
-│   ├── pipeline.py        # 数据Pipeline + 4种分块策略
-│   ├── retriever.py       # 检索器 (相似度/MMR)
-│   ├── generator.py       # 生成器 (Prompt+LLM+多轮对话)
-│   ├── rag_chain.py       # RAG 完整链路
-│   └── evaluator.py       # RAGAS 评估
+├── backend/               # Python 后端
+│   ├── src/
+│   │   ├── config.py      # 配置管理
+│   │   ├── pipeline.py    # 数据Pipeline + 4种分块策略
+│   │   ├── retriever.py   # 检索器 (相似度/MMR)
+│   │   ├── generator.py   # 生成器 (Prompt+LLM+多轮对话)
+│   │   ├── rag_chain.py   # RAG 完整链路
+│   │   └── evaluator.py   # RAGAS 评估
+│   ├── app_api.py         # FastAPI 入口
+│   ├── fast_api_optimizations.py  # 中间件
+│   ├── explore.py         # Chroma 探索工具
+│   └── tests/             # 单元测试 (26个)
 ├── frontend/              # React SPA 前端
 │   ├── src/
 │   │   ├── main.jsx       # React 入口
@@ -87,8 +92,6 @@ python -m src.rag_chain
 │   ├── index.html
 │   ├── package.json
 │   └── vite.config.js
-├── app_api.py             # FastAPI 后端
-├── explore.py             # Chroma 向量库探索工具
 ├── tests/                 # 单元测试 (26个)
 ├── data/
 │   ├── pdfs/              # PDF 知识库

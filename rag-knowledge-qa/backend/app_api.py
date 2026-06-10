@@ -5,15 +5,11 @@
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import sys
 import os
 from functools import lru_cache
 
 # 导入优化配置
 from fast_api_optimizations import create_optimized_app, async_cached_function
-
-# 添加 src 目录到 Python 路径
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from src.rag_chain import RAGChain
 from src.config import Config

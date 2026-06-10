@@ -14,9 +14,9 @@
 - 第1周: Task 1-7 MVP（Pipeline / 检索器 / 生成器 / RAG Chain / 知识点 ×4）
 - 第2周: Task 8-12 优化（高级分块 / 检索对比 / RAGAS 评估 / 知识点 ×2）
 - 第3周: Task 13-15 产品化（React Web UI / 多轮对话 / README / 知识点 ×1）
-- 后端: `python app_api.py` → http://localhost:8000
+- 后端: `cd backend && python app_api.py` → http://localhost:8000
 - 前端: `cd frontend && npm run dev` → http://localhost:5173
-- 测试: 26 个测试全部通过
+- 测试: `cd backend && python -m pytest tests/ -v` 26 passed
 
 **RAGAS 基线分数 (top_k=4):**
 | 指标 | 分数 | 说明 |
@@ -30,7 +30,7 @@
 - 数据库: Chroma 本地持久化 (`data/chroma_db/`)
 - 数据: `9年级物理-电子课本.pdf` → 188页 → 189个chunk
 - Embedding: 火山引擎 doubao-embedding-text-240715, 2560维
-- 探索工具: `.venv/Scripts/python explore.py` (search/mmr/stats/sample/page)
+- 探索工具: `cd backend && python explore.py` (search/mmr/stats/sample/page)
 - 前端构建: `cd frontend && npm run build` → `frontend/dist/`
 
 ## 关键文档
@@ -107,9 +107,9 @@
 2. `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 3. 创建 `~/.ai-env/llm/config.json`（敏感配置，跨平台统一路径）
 4. 拷贝 PDF 到 `data/pdfs/`
-5. 重建向量库: `python -m src.pipeline`
-6. Mac 上运行: `python explore.py` (非 `.venv/Scripts/python`)
-7. 前端: `cd frontend && npm install && npm run dev`
+5. 重建向量库: `cd backend && python -m src.pipeline`
+6. 前端: `cd frontend && npm install && npm run dev`
+7. 探索工具: `cd backend && python explore.py`
 
 ## Git
 
