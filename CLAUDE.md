@@ -13,8 +13,9 @@
 **已全部完成:**
 - 第1周: Task 1-7 MVP（Pipeline / 检索器 / 生成器 / RAG Chain / 知识点 ×4）
 - 第2周: Task 8-12 优化（高级分块 / 检索对比 / RAGAS 评估 / 知识点 ×2）
-- 第3周: Task 13-15 产品化（Gradio Web UI / 多轮对话 / README / 知识点 ×1）
-- 启动: `python app.py` → http://localhost:7860
+- 第3周: Task 13-15 产品化（React Web UI / 多轮对话 / README / 知识点 ×1）
+- 后端: `python app_api.py` → http://localhost:8000
+- 前端: `cd frontend && npm run dev` → http://localhost:5173
 - 测试: 26 个测试全部通过
 
 **RAGAS 基线分数 (top_k=4):**
@@ -30,6 +31,7 @@
 - 数据: `9年级物理-电子课本.pdf` → 188页 → 189个chunk
 - Embedding: 火山引擎 doubao-embedding-text-240715, 2560维
 - 探索工具: `.venv/Scripts/python explore.py` (search/mmr/stats/sample/page)
+- 前端构建: `cd frontend && npm run build` → `frontend/dist/`
 
 ## 关键文档
 
@@ -107,6 +109,7 @@
 4. 拷贝 PDF 到 `data/pdfs/`
 5. 重建向量库: `python -m src.pipeline`
 6. Mac 上运行: `python explore.py` (非 `.venv/Scripts/python`)
+7. 前端: `cd frontend && npm install && npm run dev`
 
 ## Git
 

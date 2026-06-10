@@ -49,12 +49,17 @@ pip install -r requirements.txt
 python -m src.pipeline
 ```
 
-### 5. 启动问答
+### 5. 启动服务
 
-**Web 界面模式:**
+**启动后端 (FastAPI, 端口 8000):**
 ```bash
-python app.py
-# 浏览器打开 http://localhost:7860
+python app_api.py
+```
+
+**启动前端 (React + Vite, 端口 5173):**
+```bash
+cd frontend && npm install && npm run dev
+# 浏览器打开 http://localhost:5173
 ```
 
 **命令行模式:**
@@ -72,7 +77,17 @@ python -m src.rag_chain
 │   ├── generator.py       # 生成器 (Prompt+LLM+多轮对话)
 │   ├── rag_chain.py       # RAG 完整链路
 │   └── evaluator.py       # RAGAS 评估
-├── app.py                 # Gradio Web UI
+├── frontend/              # React SPA 前端
+│   ├── src/
+│   │   ├── main.jsx       # React 入口
+│   │   ├── components/
+│   │   │   └── ChatInterface.jsx  # 主聊天组件
+│   │   ├── ApiClient.jsx  # API 客户端
+│   │   └── ChatCache.js   # 聊天缓存
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
+├── app_api.py             # FastAPI 后端
 ├── explore.py             # Chroma 向量库探索工具
 ├── tests/                 # 单元测试 (26个)
 ├── data/
@@ -89,7 +104,8 @@ python -m src.rag_chain
 | Embedding | 火山引擎 Doubao Embedding (2560维) |
 | 向量数据库 | Chroma (本地持久化) |
 | 框架 | LangChain |
-| Web UI | Gradio |
+| 后端 | FastAPI |
+| 前端 | React + Vite + Tailwind CSS |
 | 评估 | RAGAS (4指标) |
 | 非结构化处理 | PyPDF + LangChain TextSplitters |
 

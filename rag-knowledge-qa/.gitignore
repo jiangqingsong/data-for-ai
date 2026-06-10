@@ -26,6 +26,8 @@ notebooks/.ipynb_checkpoints/
 node_modules/
 .pnpm-store/
 build/
+frontend/dist/
+.vite/
 *.log
 .env.local
 .env.development.local

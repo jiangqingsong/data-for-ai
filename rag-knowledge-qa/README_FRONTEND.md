@@ -48,41 +48,45 @@
 ### 安装依赖
 
 ```bash
-npm install
+cd frontend && npm install
 ```
 
 ### 启动开发服务器
 
 ```bash
-npm run dev
+cd frontend && npm run dev
 ```
 
-访问 `http://localhost:3000` 查看应用。
+访问 `http://localhost:5173` 查看应用。
 
 ### 构建生产版本
 
 ```bash
-npm run build
+cd frontend && npm run build
 ```
 
 ### 预览生产构建
 
 ```bash
-npm run preview
+cd frontend && npm run preview
 ```
 
 ## 项目结构
 
 ```
-rag-knowledge-qa/
-├── ChatInterface.jsx      # 主组件文件
-├── index.js              # 应用入口
-├── index.css             # 全局样式和 Tailwind 配置
-├── index.html            # HTML 模板
-├── vite.config.js        # Vite 配置
-├── tailwind.config.js    # Tailwind CSS 配置
-├── postcss.config.js     # PostCSS 配置
-└── package.json          # 项目配置
+frontend/
+├── index.html             # HTML 入口
+├── package.json           # 项目配置
+├── vite.config.js         # Vite 配置
+├── tailwind.config.js     # Tailwind CSS 配置
+├── postcss.config.js      # PostCSS 配置
+└── src/
+    ├── main.jsx           # React 应用入口
+    ├── index.css          # 全局样式和 Tailwind 配置
+    ├── ApiClient.jsx      # API 客户端
+    ├── ChatCache.js       # 聊天缓存
+    └── components/
+        └── ChatInterface.jsx  # 主聊天组件
 ```
 
 ## 主要组件说明

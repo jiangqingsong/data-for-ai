@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, BookOpen, Settings, Menu, X, Send, Loader2, ChevronDown, ChevronUp, Download } from 'lucide-react';
-import apiClient from './src/ApiClient.jsx';
+import apiClient from '../ApiClient.jsx';
 import ReactMarkdown from 'react-markdown';
 
 // 示例聊天数据
