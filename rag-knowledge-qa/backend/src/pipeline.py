@@ -41,12 +41,16 @@ def _ocr_page(pixmap, ocr_reader) -> str:
     return "\n".join(lines)
 
 
-def load_pdfs(pdf_dir: str) -> List[Document]:
-    """加载目录下所有 PDF 文件，自动检测扫描页并 OCR
+def load_pdfs(pdf_dir: str, file_filter: str | None = None) -> List[Document]:
+    """加载目录下的 PDF 文件，自动检测扫描页并 OCR
 
     逐页处理：
       - 先用 pymupdf 提取文本，有效内容 >= 50 字符 → 直接使用
       - 有效内容 < 50 字符 → 渲染为图片 → EasyOCR 识别
+
+    Args:
+        pdf_dir: PDF 文件目录
+        file_filter: 文件名过滤关键字（如 "数学" 只加载含"数学"的PDF），None=全部
 
     每个 Document 包含:
       - page_content: 页面文本内容
@@ -56,6 +60,9 @@ def load_pdfs(pdf_dir: str) -> List[Document]:
     pdf_files = [
         f for f in os.listdir(pdf_dir) if f.lower().endswith(".pdf")
     ]
+
+    if file_filter:
+        pdf_files = [f for f in pdf_files if file_filter in f]
 
     if not pdf_files:
         print(f"警告: {pdf_dir} 目录下没有找到 PDF 文件")
@@ -237,10 +244,14 @@ def run_pipeline(
     persist_dir: str = "../data/chroma_db",
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
+    file_filter: str | None = None,
 ) -> Chroma:
     """一键执行完整的数据 Pipeline
 
     PDF → 加载 → 清洗 → 分块 → 向量化 → Chroma
+
+    Args:
+        file_filter: 文件名过滤关键字，如 "数学" 只处理含"数学"的 PDF，None=全部
     """
     print("=" * 50)
     print("数据 Pipeline 开始执行")
@@ -248,7 +259,7 @@ def run_pipeline(
 
     # 1. 加载
     print("\n[1/4] 加载 PDF...")
-    docs = load_pdfs(pdf_dir)
+    docs = load_pdfs(pdf_dir, file_filter=file_filter)
     if not docs:
         raise ValueError(f"未找到 PDF 文件: {pdf_dir}")
 
@@ -276,7 +287,11 @@ def run_pipeline(
 
 
 if __name__ == "__main__":
-    run_pipeline()
+    import sys
+    file_filter = sys.argv[1] if len(sys.argv) > 1 else None
+    if file_filter:
+        print(f"📌 过滤关键字: {file_filter}")
+    run_pipeline(file_filter=file_filter)
 
 
 # ============================================================
