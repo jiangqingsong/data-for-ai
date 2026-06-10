@@ -17,7 +17,7 @@ class Retriever:
 
     def __init__(
         self,
-        persist_dir: str = "./data/chroma_db",
+        persist_dir: str = "../data/chroma_db",
         embedding_model: str | None = None,
     ):
         from src.config import Config

@@ -63,7 +63,7 @@ class Config:
 
     # --- Chroma ---
     CHROMA_PERSIST_DIR: str = os.getenv(
-        "CHROMA_PERSIST_DIR", "./data/chroma_db"
+        "CHROMA_PERSIST_DIR", "../data/chroma_db"
     )
 
     # --- Retriever ---
@@ -72,7 +72,7 @@ class Config:
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "200"))
 
     # --- PDF 数据目录 ---
-    PDF_DIR: str = os.getenv("PDF_DIR", "./data/pdfs")
+    PDF_DIR: str = os.getenv("PDF_DIR", "../data/pdfs")
 
     @classmethod
     def validate(cls) -> list[str]:

@@ -10,6 +10,7 @@ env/
 # Data
 data/pdfs/
 data/chroma_db/
+backend/data/
 
 # Environment
 .env

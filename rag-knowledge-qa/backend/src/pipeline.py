@@ -1,18 +1,56 @@
-"""数据 Pipeline — PDF 加载、清洗、分块、向量化"""
+"""数据 Pipeline — PDF 加载、清洗、分块、向量化
+
+支持文字版 PDF（直接提取文本）和扫描版 PDF（OCR 识别），自动按页检测路由。
+"""
 import os
 import re
 from typing import List
 
-from langchain_community.document_loaders import PyPDFLoader
+import fitz  # pymupdf
+import numpy as np
+from PIL import Image
 from langchain_core.documents import Document
+
+# EasyOCR 全局实例，延迟初始化
+_ocr_reader = None
+
+
+def _get_ocr_reader():
+    """延迟初始化 EasyOCR reader（只在首次遇到扫描页时加载模型）"""
+    global _ocr_reader
+    if _ocr_reader is None:
+        import easyocr
+        _ocr_reader = easyocr.Reader(["ch_sim", "en"], gpu=True)
+    return _ocr_reader
+
+
+def _is_scanned_page(text: str, threshold: int = 50) -> bool:
+    """判断页面是否为扫描版（有效文本不足）"""
+    cleaned = text.strip()
+    for wm in ["微信公众号：电子课本大全", "电子课本大全"]:
+        cleaned = cleaned.replace(wm, "")
+    return len(cleaned.strip()) < threshold
+
+
+def _ocr_page(pixmap, ocr_reader) -> str:
+    """对单页渲染图片执行 OCR，返回识别文本"""
+    img = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
+    img_np = np.array(img)
+    results = ocr_reader.readtext(img_np)
+    lines = [item[1] for item in results]
+    return "\n".join(lines)
 
 
 def load_pdfs(pdf_dir: str) -> List[Document]:
-    """加载目录下所有 PDF 文件，返回 Document 列表
+    """加载目录下所有 PDF 文件，自动检测扫描页并 OCR
+
+    逐页处理：
+      - 先用 pymupdf 提取文本，有效内容 >= 50 字符 → 直接使用
+      - 有效内容 < 50 字符 → 渲染为图片 → EasyOCR 识别
 
     每个 Document 包含:
       - page_content: 页面文本内容
-      - metadata: {"source": 文件名, "page": 页码}
+      - metadata: {"source": 文件名, "page": 页码, "is_scanned": bool}
     """
     all_docs = []
     pdf_files = [
@@ -23,32 +61,71 @@ def load_pdfs(pdf_dir: str) -> List[Document]:
         print(f"警告: {pdf_dir} 目录下没有找到 PDF 文件")
         return all_docs
 
+    ocr_reader = None
+    scanned_count = 0
+
     for pdf_file in pdf_files:
         filepath = os.path.join(pdf_dir, pdf_file)
+        print(f"  加载: {pdf_file} ...")
         try:
-            loader = PyPDFLoader(filepath)
-            docs = loader.load()
-            # 补充文件名元数据
-            for doc in docs:
-                doc.metadata["source"] = pdf_file
-            all_docs.extend(docs)
-            print(f"  OK 加载: {pdf_file} ({len(docs)} 页)")
-        except Exception as e:
-            print(f"  FAIL 加载失败: {pdf_file}, 错误: {e}")
+            doc = fitz.open(filepath)
+            text_pages = 0
+            ocr_pages = 0
 
-    print(f"共加载 {len(pdf_files)} 个 PDF, {len(all_docs)} 个页面")
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                text = page.get_text()
+
+                if _is_scanned_page(text):
+                    if ocr_reader is None:
+                        print("    检测到扫描页，加载 OCR 模型...")
+                        ocr_reader = _get_ocr_reader()
+                    pix = page.get_pixmap(dpi=200)
+                    text = _ocr_page(pix, ocr_reader)
+                    ocr_pages += 1
+                    scanned_count += 1
+                else:
+                    text_pages += 1
+
+                all_docs.append(Document(
+                    page_content=text,
+                    metadata={
+                        "source": pdf_file,
+                        "page": page_num,
+                        "is_scanned": _is_scanned_page(page.get_text()),
+                    },
+                ))
+
+            doc.close()
+            print(f"    OK: 文字 {text_pages} 页 + OCR {ocr_pages} 页")
+
+        except Exception as e:
+            print(f"    FAIL: {pdf_file}, 错误: {e}")
+
+    print(f"共加载 {len(pdf_files)} 个 PDF, {len(all_docs)} 页"
+          f" (其中 OCR {scanned_count} 页)")
     return all_docs
 
 
-def clean_documents(docs: List[Document]) -> List[Document]:
-    """清洗文档文本：去除多余空白、规范化中文
+WATERMARK_PATTERNS = [
+    "微信公众号：电子课本大全",
+    "电子课本大全",
+    "微信公众号",
+]
 
+
+def clean_documents(docs: List[Document]) -> List[Document]:
+    """清洗文档文本：去水印、去除多余空白、规范化中文
+
+    - 移除水印文字
     - 合并连续空格
     - 合并连续换行（最多保留1个）
-    - 去除页眉页脚类短行（可选）
     """
     for doc in docs:
         text = doc.page_content
+        # 移除水印
+        for wm in WATERMARK_PATTERNS:
+            text = text.replace(wm, "")
         # 合并连续空格
         text = re.sub(r"[ \t]+", " ", text)
         # 合并连续换行（保留最多1个换行）
@@ -99,7 +176,7 @@ def split_documents(
 
 def build_vectorstore(
     docs: List[Document],
-    persist_dir: str = "./data/chroma_db",
+    persist_dir: str = "../data/chroma_db",
     embedding_model: str | None = None,
     batch_size: int = 100,
 ) -> Chroma:
@@ -156,8 +233,8 @@ def build_vectorstore(
 
 
 def run_pipeline(
-    pdf_dir: str = "./data/pdfs",
-    persist_dir: str = "./data/chroma_db",
+    pdf_dir: str = "../data/pdfs",
+    persist_dir: str = "../data/chroma_db",
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
 ) -> Chroma:
