@@ -99,6 +99,28 @@ cd backend && python -m src.rag_chain
 └── docs/knowledge/        # 知识点文档 (7篇)
 ```
 
+## 扫描版 PDF 支持
+
+Pipeline 自动检测 PDF 页面类型：
+- **文字版页面**：`pymupdf` 直接提取文本
+- **扫描版页面**：自动渲染为图片 → EasyOCR 识别中文
+
+> 推荐在 **Windows + NVIDIA GPU** 上执行 pipeline（EasyOCR CUDA 加速，321页约5-15分钟）。
+> Intel Mac CPU 模式约需 50-90 分钟。
+
+### 跨平台向量库同步
+
+向量库较大（5-15MB）且为二进制文件，**不提交 Git**。两台电脑之间传输：
+
+```bash
+# Windows（构建端）
+cd rag-knowledge-qa
+tar -czf chroma_db.tar.gz data/chroma_db/
+
+# 通过 U盘/网盘/scp 传到 Mac 后解压
+tar -xzf chroma_db.tar.gz -C rag-knowledge-qa/data/
+```
+
 ## 技术栈
 
 | 组件 | 技术 |
@@ -110,7 +132,7 @@ cd backend && python -m src.rag_chain
 | 后端 | FastAPI |
 | 前端 | React + Vite + Tailwind CSS |
 | 评估 | RAGAS (4指标) |
-| 非结构化处理 | PyPDF + LangChain TextSplitters |
+| 非结构化处理 | pymupdf + EasyOCR + LangChain TextSplitters |
 
 ## 评估结果
 

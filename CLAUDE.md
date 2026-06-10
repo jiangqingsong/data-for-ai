@@ -8,7 +8,14 @@
 
 **项目一执行中** — RAG 知识库问答系统（3周计划）
 
-**当前进度:** Task 1-15 ✅ → 🎉 三周计划完成！
+**当前进度:** Task 1-15 ✅ → 🎉 三周计划完成！+ 扫描版PDF OCR支持
+
+**2026-06-10 更新:**
+- 🔧 修复: 后端代码移到 `backend/` 后相对路径问题（chroma_db、pdfs 路径修正为 `../data/`）
+- 🔧 修复: 扫描版 PDF 支持 — `load_pdfs()` 改用 pymupdf + EasyOCR，自动检测扫描页并 OCR
+- 📦 新依赖: `pymupdf`, `easyocr`, `Pillow`（已加入 requirements.txt）
+- ⚠️ EasyOCR 在 Intel Mac CPU 上很慢（321页约50-90分钟），推荐在 Windows+1050Ti 上跑 pipeline
+- 向量库跨平台同步: Windows 上 `tar -czf chroma_db.tar.gz data/chroma_db/` → 传到 Mac 解压
 
 **已全部完成:**
 - 第1周: Task 1-7 MVP（Pipeline / 检索器 / 生成器 / RAG Chain / 知识点 ×4）
@@ -107,7 +114,8 @@
 2. `python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 3. 创建 `~/.ai-env/llm/config.json`（敏感配置，跨平台统一路径）
 4. 拷贝 PDF 到 `data/pdfs/`
-5. 重建向量库: `cd backend && python -m src.pipeline`
+5. 重建向量库: `cd backend && python -m src.pipeline`（Windows+GPU 推荐，Mac CPU 很慢）
+   - 或从另一台电脑打包传输: `tar -czf chroma_db.tar.gz data/chroma_db/`
 6. 前端: `cd frontend && npm install && npm run dev`
 7. 探索工具: `cd backend && python explore.py`
 
