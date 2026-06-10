@@ -6,7 +6,8 @@ from src.pipeline import load_pdfs, clean_documents
 
 def test_load_pdfs_returns_documents():
     """加载 PDF 应返回 LangChain Document 列表"""
-    pdf_dir = "./data/pdfs"
+    from src.config import Config
+    pdf_dir = Config.get_pdf_dir()
     if not os.path.exists(pdf_dir) or not os.listdir(pdf_dir):
         import pytest
         pytest.skip("PDF 目录为空，跳过测试")
@@ -21,7 +22,8 @@ def test_load_pdfs_returns_documents():
 
 def test_load_pdfs_preserves_metadata():
     """加载 PDF 应保留文件名和页码等元数据"""
-    pdf_dir = "./data/pdfs"
+    from src.config import Config
+    pdf_dir = Config.get_pdf_dir()
     if not os.path.exists(pdf_dir) or not os.listdir(pdf_dir):
         import pytest
         pytest.skip("PDF 目录为空，跳过测试")

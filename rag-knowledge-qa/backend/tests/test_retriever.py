@@ -5,7 +5,8 @@ from src.retriever import Retriever
 
 def test_retriever_creation_with_persist_dir():
     """从已有 Chroma 目录创建 Retriever"""
-    persist_dir = "./data/chroma_db"
+    from src.config import Config
+    persist_dir = Config.get_chroma_dir()
     if not os.path.exists(persist_dir) or not os.listdir(persist_dir):
         import pytest
         pytest.skip("Chroma 数据目录为空，请先运行 pipeline")
@@ -17,7 +18,8 @@ def test_retriever_creation_with_persist_dir():
 
 def test_similarity_search_returns_documents():
     """相似度检索应返回文档列表"""
-    persist_dir = "./data/chroma_db"
+    from src.config import Config
+    persist_dir = Config.get_chroma_dir()
     if not os.path.exists(persist_dir) or not os.listdir(persist_dir):
         import pytest
         pytest.skip("Chroma 数据目录为空，请先运行 pipeline")
@@ -33,7 +35,8 @@ def test_similarity_search_returns_documents():
 
 def test_similarity_search_respects_top_k():
     """检索结果数量应不超过 top_k"""
-    persist_dir = "./data/chroma_db"
+    from src.config import Config
+    persist_dir = Config.get_chroma_dir()
     if not os.path.exists(persist_dir) or not os.listdir(persist_dir):
         import pytest
         pytest.skip("Chroma 数据目录为空，请先运行 pipeline")

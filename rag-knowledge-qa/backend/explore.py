@@ -26,10 +26,10 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-def main():
+def main(subdir: str | None = None):
     from src.retriever import Retriever
 
-    retriever = Retriever()
+    retriever = Retriever(subdir=subdir)
     top_k = 5
 
     # 获取 collection 信息
@@ -177,4 +177,11 @@ def _print_results(results, method, query):
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="Chroma 向量库交互式探索工具")
+    parser.add_argument(
+        "--subdir", default=None,
+        help="选择要探索的向量库子目录 (chroma_db/{subdir}/)"
+    )
+    args = parser.parse_args()
+    main(subdir=args.subdir)

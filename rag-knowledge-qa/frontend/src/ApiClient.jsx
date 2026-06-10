@@ -220,6 +220,32 @@ class ApiClient {
     }
 
     /**
+     * 获取文档列表
+     */
+    async getDocuments() {
+        try {
+            return await this.request('GET', '/documents');
+        } catch (error) {
+            console.error('获取文档列表失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 获取文档指定页的原文内容
+     * @param {string} filename - 文档文件名
+     * @param {number} page - 页码（0-indexed）
+     */
+    async getDocumentPage(filename, page) {
+        try {
+            return await this.request('GET', `/document/page?filename=${encodeURIComponent(filename)}&page=${page}`);
+        } catch (error) {
+            console.error('获取页面内容失败:', error);
+            return null;
+        }
+    }
+
+    /**
      * 健康检查
      */
     async healthCheck() {

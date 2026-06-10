@@ -1,0 +1,425 @@
+/**
+ * App - 应用根组件
+ * 拥有所有全局状态和业务逻辑，通过 props 向下传递给子组件
+ *
+ * 状态架构（迭代4）:
+ * - sessions[] + currentSessionId: 多会话管理
+ * - rightPanelOpen + selectedSourceData: 右侧溯源面板
+ * - documents: 已绑定文档列表
+ * - retrievalPhase: 检索状态区分
+ */
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import ThreeColumnLayout from './ThreeColumnLayout';
+import { ToastProvider } from './Toast';
+import apiClient from '../ApiClient.jsx';
+
+/** 生成唯一 ID */
+const generateId = () => crypto.randomUUID();
+
+/** 创建默认会话 */
+const createDefaultSession = () => ({
+  id: generateId(),
+  title: '新对话',
+  messages: [
+    {
+      id: generateId(),
+      role: 'assistant',
+      content: '你好！我是你的物理知识库助手。有什么物理问题需要我帮助解答吗？',
+      timestamp: new Date().toLocaleTimeString(),
+      favorite: false,
+    }
+  ],
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+/** 预生成默认会话，确保 sessions 和 currentSessionId 引用同一 ID */
+const defaultSession = createDefaultSession();
+
+const App = () => {
+  // ========== 状态管理 ==========
+  const [sessions, setSessions] = useState(() => [defaultSession]);
+  const [currentSessionId, setCurrentSessionId] = useState(() => defaultSession.id);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [topK, setTopK] = useState(4);
+  const [retrievalStrategy, setRetrievalStrategy] = useState('similarity');
+  const [activeTab, setActiveTab] = useState('chat');
+  const [systemStatus, setSystemStatus] = useState(null);
+  const [knowledgeStats, setKnowledgeStats] = useState(null);
+  const [isLoadingSystemData, setIsLoadingSystemData] = useState(true);
+
+  /* 迭代4新增: 右侧溯源面板 */
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [selectedSourceData, setSelectedSourceData] = useState(null);
+  // { filename, page, snippet, pageText, loading }
+
+  /* 迭代4新增: 已绑定文档列表 */
+  const [documents, setDocuments] = useState([]);
+
+  /* 迭代4新增: 检索阶段指示 */
+  const [retrievalPhase, setRetrievalPhase] = useState(null);
+  // null | "retrieving" | "generating"
+  const phaseTimerRef = useRef(null);
+
+  const messagesEndRef = useRef(null);
+
+  // ========== 派生值 ==========
+
+  const currentSession = sessions.find(s => s.id === currentSessionId) || sessions[0];
+  const messages = currentSession ? currentSession.messages : [];
+
+  // ========== 会话消息更新辅助 ==========
+
+  const updateCurrentSessionMessages = useCallback((updater) => {
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === currentSessionId
+          ? { ...s, messages: updater(s.messages), updatedAt: new Date().toISOString() }
+          : s
+      )
+    );
+  }, [currentSessionId]);
+
+  // ========== API 调用 ==========
+
+  const fetchSystemStatus = async () => {
+    try {
+      const data = await apiClient.getSystemStatus();
+      if (data) setSystemStatus(data);
+    } catch (error) {
+      console.error('获取系统状态失败:', error);
+    }
+  };
+
+  const fetchKnowledgeStats = async () => {
+    try {
+      const data = await apiClient.getKnowledgeStats();
+      if (data) setKnowledgeStats(data);
+    } catch (error) {
+      console.error('获取知识库统计失败:', error);
+    }
+  };
+
+  /** 获取已绑定文档列表 */
+  const fetchDocuments = async () => {
+    try {
+      const data = await apiClient.getDocuments();
+      if (data?.documents) setDocuments(data.documents);
+    } catch (error) {
+      console.error('获取文档列表失败:', error);
+    }
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // ========== 副作用 ==========
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      await Promise.all([fetchSystemStatus(), fetchKnowledgeStats(), fetchDocuments()]);
+      setIsLoadingSystemData(false);
+    };
+    fetchData();
+  }, []);
+
+  // ========== 溯源面板控制 ==========
+
+  /** 打开右侧溯源面板，加载指定文档页的原文 */
+  const handleOpenSourceDetail = useCallback(async (filename, page, snippet) => {
+    setRightPanelOpen(true);
+    setSelectedSourceData({ filename, page, snippet, pageText: null, loading: true });
+    try {
+      const data = await apiClient.getDocumentPage(filename, page);
+      setSelectedSourceData(prev => ({
+        ...prev,
+        pageText: data?.page_text || '该页无可提取文本（可能是扫描页）',
+        loading: false,
+      }));
+    } catch (err) {
+      setSelectedSourceData(prev => ({
+        ...prev,
+        pageText: '加载页面内容失败，请稍后重试',
+        loading: false,
+      }));
+    }
+  }, []);
+
+  /** 关闭右侧溯源面板 */
+  const handleCloseRightPanel = useCallback(() => {
+    setRightPanelOpen(false);
+    setSelectedSourceData(null);
+  }, []);
+
+  // ========== 文档管理 ==========
+
+  /** 解绑文档 */
+  const handleUnbindDocument = useCallback((filename) => {
+    setDocuments(prev => prev.filter(d => d.filename !== filename));
+  }, []);
+
+  // ========== 聊天核心逻辑 ==========
+
+  /** 执行流式聊天 */
+  const executeChatStream = useCallback(async (questionText) => {
+    const streamMessageId = generateId();
+    const streamMessage = {
+      id: streamMessageId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toLocaleTimeString(),
+      isStreaming: true,
+      favorite: false,
+    };
+
+    updateCurrentSessionMessages(msgs => [...msgs, streamMessage]);
+
+    // 检索阶段指示
+    setRetrievalPhase('retrieving');
+    if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+    phaseTimerRef.current = setTimeout(() => setRetrievalPhase('generating'), 1500);
+
+    const onChunk = (currentText) => {
+      updateCurrentSessionMessages(msgs =>
+        msgs.map(msg => msg.id === streamMessageId ? { ...msg, content: currentText } : msg)
+      );
+    };
+
+    const onComplete = (result) => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+      setRetrievalPhase(null);
+      updateCurrentSessionMessages(msgs =>
+        msgs.map(msg =>
+          msg.id === streamMessageId
+            ? {
+                ...msg,
+                content: result.answer,
+                sources: result.sources,
+                context_docs: result.context_docs,
+                isStreaming: false,
+              }
+            : msg
+        )
+      );
+      setIsLoading(false);
+    };
+
+    const onError = (error) => {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+      setRetrievalPhase(null);
+      console.error('流式聊天错误:', error);
+      updateCurrentSessionMessages(msgs =>
+        msgs.map(msg =>
+          msg.id === streamMessageId
+            ? { ...msg, content: `抱歉，出现了错误: ${error.message}。请稍后重试。`, isStreaming: false }
+            : msg
+        )
+      );
+      setIsLoading(false);
+    };
+
+    try {
+      await apiClient.chatStream(questionText, topK, retrievalStrategy, onChunk, onComplete, onError);
+    } catch (error) {
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+      setRetrievalPhase(null);
+      console.error('聊天错误:', error);
+      updateCurrentSessionMessages(msgs =>
+        msgs.map(msg =>
+          msg.id === streamMessageId
+            ? { ...msg, content: `抱歉，出现了错误: ${error.message}。请稍后重试。`, isStreaming: false }
+            : msg
+        )
+      );
+      setIsLoading(false);
+    }
+  }, [topK, retrievalStrategy, updateCurrentSessionMessages]);
+
+  /** 发送消息 */
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!inputMessage.trim()) return;
+
+    const questionText = inputMessage;
+
+    const userMessage = {
+      id: generateId(),
+      role: 'user',
+      content: questionText,
+      timestamp: new Date().toLocaleTimeString(),
+      favorite: false,
+    };
+
+    updateCurrentSessionMessages(msgs => [...msgs, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    setSessions(prev =>
+      prev.map(s => {
+        if (s.id !== currentSessionId) return s;
+        const isFirstQuestion = s.messages.filter(m => m.role === 'user').length === 0;
+        if (isFirstQuestion) {
+          const title = questionText.slice(0, 20) + (questionText.length > 20 ? '...' : '');
+          return { ...s, title };
+        }
+        return s;
+      })
+    );
+
+    await executeChatStream(questionText);
+  };
+
+  // ========== 会话管理 ==========
+
+  const handleCreateSession = () => {
+    const newSession = createDefaultSession();
+    setSessions(prev => [...prev, newSession]);
+    setCurrentSessionId(newSession.id);
+    setInputMessage('');
+  };
+
+  const handleSwitchSession = (sessionId) => {
+    setCurrentSessionId(sessionId);
+    setInputMessage('');
+  };
+
+  const handleRenameSession = (sessionId, newTitle) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === sessionId ? { ...s, title: trimmed, updatedAt: new Date().toISOString() } : s
+      )
+    );
+  };
+
+  const handleDeleteSession = (sessionId) => {
+    setSessions(prev => {
+      const filtered = prev.filter(s => s.id !== sessionId);
+      if (sessionId === currentSessionId && filtered.length > 0) {
+        setTimeout(() => setCurrentSessionId(filtered[0].id), 0);
+      }
+      return filtered;
+    });
+  };
+
+  const handleExportSession = () => {
+    const session = sessions.find(s => s.id === currentSessionId);
+    if (!session) return;
+    const text = session.messages
+      .map(msg => `${msg.role === 'user' ? '【用户】' : '【AI】'}\n${msg.content}\n`)
+      .join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${session.title || '对话记录'}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleRefreshContext = () => {
+    updateCurrentSessionMessages(() => [
+      {
+        id: generateId(),
+        role: 'assistant',
+        content: '上下文已清空。有什么新的物理问题需要我帮助解答吗？',
+        timestamp: new Date().toLocaleTimeString(),
+        favorite: false,
+      }
+    ]);
+  };
+
+  const handleRegenerate = async () => {
+    const session = sessions.find(s => s.id === currentSessionId);
+    if (!session) return;
+    const msgs = session.messages;
+    let lastUserIndex = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') { lastUserIndex = i; break; }
+    }
+    if (lastUserIndex === -1) return;
+    const questionText = msgs[lastUserIndex].content;
+    updateCurrentSessionMessages(() => msgs.slice(0, lastUserIndex + 1));
+    setIsLoading(true);
+    await executeChatStream(questionText);
+  };
+
+  const handleToggleFavorite = (messageId) => {
+    updateCurrentSessionMessages(msgs =>
+      msgs.map(msg => msg.id === messageId ? { ...msg, favorite: !msg.favorite } : msg)
+    );
+  };
+
+  // ========== UI 事件处理 ==========
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  };
+
+  const handleToggleSidebar = () => setSidebarOpen(prev => !prev);
+  const handleToggleAdvanced = () => setShowAdvancedSettings(prev => !prev);
+  const handleTopKChange = (value) => setTopK(value);
+  const handleStrategyChange = (value) => setRetrievalStrategy(value);
+  const handleInputChange = (value) => setInputMessage(value);
+
+  // ========== 渲染 ==========
+
+  return (
+    <ToastProvider>
+      <ThreeColumnLayout
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+      sidebarOpen={sidebarOpen}
+      onToggleSidebar={handleToggleSidebar}
+      knowledgeStats={knowledgeStats}
+      systemStatus={systemStatus}
+      showAdvancedSettings={showAdvancedSettings}
+      onToggleAdvanced={handleToggleAdvanced}
+      topK={topK}
+      onTopKChange={handleTopKChange}
+      retrievalStrategy={retrievalStrategy}
+      onStrategyChange={handleStrategyChange}
+      messages={messages}
+      isLoading={isLoading}
+      messagesEndRef={messagesEndRef}
+      inputMessage={inputMessage}
+      onInputChange={handleInputChange}
+      onSend={handleSendMessage}
+      isLoadingSystemData={isLoadingSystemData}
+      /* 会话管理 */
+      sessions={sessions}
+      currentSessionId={currentSessionId}
+      onCreateSession={handleCreateSession}
+      onSwitchSession={handleSwitchSession}
+      onRenameSession={handleRenameSession}
+      onDeleteSession={handleDeleteSession}
+      onExportSession={handleExportSession}
+      onRefreshContext={handleRefreshContext}
+      onRegenerate={handleRegenerate}
+      onToggleFavorite={handleToggleFavorite}
+      /* 迭代4: 溯源面板 */
+      rightPanelOpen={rightPanelOpen}
+      selectedSourceData={selectedSourceData}
+      onOpenSourceDetail={handleOpenSourceDetail}
+      onCloseRightPanel={handleCloseRightPanel}
+      documents={documents}
+      onUnbindDocument={handleUnbindDocument}
+      retrievalPhase={retrievalPhase}
+    />
+    </ToastProvider>
+  );
+};
+
+export default App;

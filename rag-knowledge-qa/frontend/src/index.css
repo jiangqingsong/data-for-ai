@@ -25,22 +25,22 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #F5F7FA;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #E5E7EB;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #86909C;
 }
 
 /* 自定义选择样式 */
 select {
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2386909C' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
@@ -51,7 +51,7 @@ select {
 
 /* 自定义聚焦样式 */
 .focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #1677FF;
   outline-offset: 2px;
 }
 
@@ -67,26 +67,50 @@ select {
   }
 }
 
-.animate-slideIn {
-  animation: slideIn 0.3s ease-out;
+/* 右侧溯源面板滑入动画 */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
-/* 打字机效果 */
-@keyframes typing {
-  from { width: 0 }
-  to { width: 100% }
+.right-panel-enter {
+  animation: slideInRight 0.3s ease-out;
 }
 
-@keyframes blink-caret {
-  from, to { border-color: transparent }
-  50% { border-color: #6b7280 }
+/* 右侧溯源面板滑出动画 */
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
 }
 
-.animate-typing {
-  overflow: hidden;
-  border-right: .15em solid #6b7280;
-  white-space: nowrap;
-  animation:
-    typing 3.5s steps(40, end),
-    blink-caret .75s step-end infinite;
+.right-panel-exit {
+  animation: slideOutRight 0.25s ease-in;
+}
+
+/* Toast 入场动画 */
+@keyframes toastIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-toastIn {
+  animation: toastIn 0.3s ease-out;
 }

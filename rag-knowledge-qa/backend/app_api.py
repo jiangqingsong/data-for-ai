@@ -35,6 +35,7 @@ class QuestionRequest(BaseModel):
     question: str
     top_k: Optional[int] = 4
     search_type: str = "similarity"
+    subdir: Optional[str] = None  # PDF_BASE_DIR 下的子目录，选择对应的向量库
 
 
 class AnswerResponse(BaseModel):
@@ -123,7 +124,7 @@ async def chat(request: QuestionRequest):
             raise HTTPException(status_code=400, detail="问题不能为空")
 
         # 使用指定的参数创建临时 RAG 链
-        temp_rag_chain = RAGChain(top_k=request.top_k)
+        temp_rag_chain = RAGChain(top_k=request.top_k, subdir=request.subdir)
 
         # 调用 RAG 链
         result = temp_rag_chain.ask(
@@ -195,12 +196,12 @@ async def download_pdf(filename: str):
             # 尝试相对路径
             file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), Config.PDF_DIR, filename)
             if not os.path.exists(file_path) or not os.path.isfile(file_path):
-                # 尝试直接在当前目录的data/pdfs中查找
-                fallback_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "pdfs", filename)
+                # 尝试使用 PDF_BASE_DIR 相对路径查找
+                fallback_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), Config.PDF_BASE_DIR, filename)
                 if not os.path.exists(fallback_path) or not os.path.isfile(fallback_path):
                     # 尝试匹配部分文件名
                     import glob
-                    pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "pdfs")
+                    pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), Config.PDF_BASE_DIR)
                     matching_files = glob.glob(os.path.join(pdf_dir, f"*{filename}*"))
                     if not matching_files:
                         # 尝试移除扩展名匹配
@@ -257,10 +258,111 @@ async def test_pdf_path(filename: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"路径测试失败: {str(e)}")
 
-    except HTTPException as e:
-        raise e
+
+@app.get("/api/documents")
+async def list_documents():
+    """列出所有已绑定的 PDF 文档及其页数"""
+    try:
+        from src.config import Config
+        import os
+        import glob
+        import fitz
+
+        pdf_dir = Config.PDF_DIR
+        if not os.path.isabs(pdf_dir):
+            pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+
+        pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))
+        documents = []
+
+        for filepath in pdf_files:
+            filename = os.path.basename(filepath)
+            try:
+                doc = fitz.open(filepath)
+                page_count = len(doc)
+                size_bytes = os.path.getsize(filepath)
+                doc.close()
+                documents.append({
+                    "filename": filename,
+                    "page_count": page_count,
+                    "size_bytes": size_bytes,
+                })
+            except Exception as e:
+                documents.append({
+                    "filename": filename,
+                    "page_count": 0,
+                    "size_bytes": os.path.getsize(filepath),
+                    "error": str(e),
+                })
+
+        return {"documents": documents}
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"下载失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取文档列表失败: {str(e)}")
+
+
+@app.get("/api/document/page")
+async def get_document_page(filename: str, page: int = 0):
+    """获取指定文档指定页的原文内容"""
+    try:
+        from src.config import Config
+        import os
+        import re
+        import glob
+        import fitz
+
+        # 安全检查
+        if ".." in filename or os.path.isabs(filename):
+            raise HTTPException(status_code=400, detail="非法的文件名")
+
+        # 文件名解码
+        try:
+            filename = filename.encode('latin1').decode('utf-8')
+        except (UnicodeDecodeError, UnicodeEncodeError):
+            pass
+
+        filename = re.sub(r'[^一-龥a-zA-Z0-9.\-_（）()]', '', filename)
+
+        # 路径解析（复用 download-pdf 的逻辑）
+        pdf_dir = Config.PDF_DIR
+        if not os.path.isabs(pdf_dir):
+            pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+
+        file_path = os.path.join(pdf_dir, filename)
+
+        if not os.path.exists(file_path):
+            # 尝试模糊匹配
+            matching = glob.glob(os.path.join(pdf_dir, f"*{filename}*"))
+            if not matching:
+                filename_no_ext = os.path.splitext(filename)[0]
+                matching = glob.glob(os.path.join(pdf_dir, f"*{filename_no_ext}*.pdf"))
+            if matching:
+                file_path = matching[0]
+            else:
+                raise HTTPException(status_code=404, detail=f"文件 {filename} 不存在")
+
+        # 打开 PDF 读取指定页
+        doc = fitz.open(file_path)
+        total_pages = len(doc)
+
+        if page < 0 or page >= total_pages:
+            doc.close()
+            raise HTTPException(status_code=400, detail=f"页码超出范围: {page} (共 {total_pages} 页)")
+
+        page_text = doc[page].get_text()
+        doc.close()
+
+        return {
+            "filename": os.path.basename(file_path),
+            "page": page,
+            "page_text": page_text,
+            "total_pages": total_pages,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取页面内容失败: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -72,7 +72,42 @@ class Config:
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "200"))
 
     # --- PDF 数据目录 ---
-    PDF_DIR: str = os.getenv("PDF_DIR", "../data/pdfs")
+    PDF_BASE_DIR: str = os.getenv(
+        "PDF_BASE_DIR", os.getenv("PDF_DIR", "../data/pdfs")
+    )
+    # PDF_DIR 保留为别名，兼容旧代码
+    PDF_DIR: str = PDF_BASE_DIR
+
+    @classmethod
+    def get_pdf_dir(cls, subdir: str | None = None) -> str:
+        """返回 PDF 目录路径，支持子目录
+
+        Args:
+            subdir: PDF_BASE_DIR 下的子目录名，None 则返回 PDF_BASE_DIR
+
+        Returns:
+            PDF 目录完整路径
+        """
+        if subdir:
+            return os.path.join(cls.PDF_BASE_DIR, subdir)
+        return cls.PDF_BASE_DIR
+
+    @classmethod
+    def get_chroma_dir(cls, subdir: str | None = None) -> str:
+        """返回 Chroma 持久化目录路径，按子目录分存
+
+        subdir=None → chroma_db/（兼容旧行为）
+        subdir="math" → chroma_db/math/
+
+        Args:
+            subdir: 子目录名，None 则返回根 chroma_db
+
+        Returns:
+            Chroma 持久化目录完整路径
+        """
+        if subdir:
+            return os.path.join(cls.CHROMA_PERSIST_DIR, subdir)
+        return cls.CHROMA_PERSIST_DIR
 
     @classmethod
     def validate(cls) -> list[str]:

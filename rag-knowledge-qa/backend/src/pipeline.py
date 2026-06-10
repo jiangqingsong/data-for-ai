@@ -240,8 +240,9 @@ def build_vectorstore(
 
 
 def run_pipeline(
-    pdf_dir: str = "../data/pdfs",
-    persist_dir: str = "../data/chroma_db",
+    pdf_dir: str | None = None,
+    persist_dir: str | None = None,
+    subdir: str | None = None,
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
     file_filter: str | None = None,
@@ -251,10 +252,24 @@ def run_pipeline(
     PDF → 加载 → 清洗 → 分块 → 向量化 → Chroma
 
     Args:
+        pdf_dir: PDF 文件目录（None=自动从 Config 读取）
+        persist_dir: Chroma 持久化目录（None=自动从 Config 读取）
+        subdir: PDF_BASE_DIR 下的子目录名，PDF 和向量库按子目录分存
         file_filter: 文件名过滤关键字，如 "数学" 只处理含"数学"的 PDF，None=全部
     """
+    from src.config import Config
+
+    if pdf_dir is None:
+        pdf_dir = Config.get_pdf_dir(subdir)
+    if persist_dir is None:
+        persist_dir = Config.get_chroma_dir(subdir)
+
     print("=" * 50)
     print("数据 Pipeline 开始执行")
+    if subdir:
+        print(f"子目录: {subdir}")
+    print(f"PDF 目录: {pdf_dir}")
+    print(f"向量库:   {persist_dir}")
     print("=" * 50)
 
     # 1. 加载
@@ -288,10 +303,25 @@ def run_pipeline(
 
 if __name__ == "__main__":
     import sys
-    file_filter = sys.argv[1] if len(sys.argv) > 1 else None
-    if file_filter:
-        print(f"📌 过滤关键字: {file_filter}")
-    run_pipeline(file_filter=file_filter)
+    import argparse
+
+    parser = argparse.ArgumentParser(description="RAG 数据 Pipeline — PDF → 向量库")
+    parser.add_argument(
+        "file_filter", nargs="?", default=None,
+        help="文件名过滤关键字（如 '数学'），只处理含关键字的 PDF"
+    )
+    parser.add_argument(
+        "--subdir", default=None,
+        help="PDF_BASE_DIR 下的子目录名，PDF 和向量库按子目录分存"
+    )
+    args = parser.parse_args()
+
+    if args.file_filter:
+        print(f"[filter] 过滤关键字: {args.file_filter}")
+    if args.subdir:
+        print(f"[subdir] 子目录: {args.subdir}")
+
+    run_pipeline(subdir=args.subdir, file_filter=args.file_filter)
 
 
 # ============================================================

@@ -22,9 +22,11 @@ class RAGChain:
     def __init__(
         self,
         persist_dir: str | None = None,
+        subdir: str | None = None,
         top_k: int | None = None,
     ):
-        self.persist_dir = persist_dir or Config.CHROMA_PERSIST_DIR
+        self.subdir = subdir
+        self.persist_dir = persist_dir or Config.get_chroma_dir(subdir)
         self.top_k = top_k or Config.RETRIEVER_TOP_K
 
         self.retriever = Retriever(persist_dir=self.persist_dir)

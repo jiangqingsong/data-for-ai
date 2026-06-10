@@ -17,12 +17,15 @@ class Retriever:
 
     def __init__(
         self,
-        persist_dir: str = "../data/chroma_db",
+        persist_dir: str | None = None,
+        subdir: str | None = None,
         embedding_model: str | None = None,
     ):
         from src.config import Config
         from langchain_openai import OpenAIEmbeddings
 
+        if persist_dir is None:
+            persist_dir = Config.get_chroma_dir(subdir)
         if embedding_model is None:
             embedding_model = Config.EMBEDDING_API_MODEL
 
