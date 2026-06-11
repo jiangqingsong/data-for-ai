@@ -31,10 +31,10 @@ const SidebarNav = ({ activeTab, onTabChange }) => {
               <button
                 key={item.key}
                 onClick={() => onTabChange(item.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-body rounded-element transition-colors ${
+                className={`w-full flex items-center gap-3 px-3 py-2 text-body rounded-element transition-colors border-l-[3px] ${
                   isActive
-                    ? 'bg-brand-50 text-brand-500'
-                    : 'text-text-primary hover:bg-gray-50'
+                    ? 'bg-brand-50 text-brand-500 border-l-brand-500'
+                    : 'text-text-primary hover:bg-gray-50 border-l-transparent'
                 }`}
               >
                 <Icon size={18} className={isActive ? 'text-brand-500' : 'text-text-secondary'} />
@@ -58,10 +58,10 @@ const SidebarNav = ({ activeTab, onTabChange }) => {
               <button
                 key={item.key}
                 onClick={() => onTabChange(item.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-body rounded-element transition-colors ${
+                className={`w-full flex items-center gap-3 px-3 py-2 text-body rounded-element transition-colors border-l-[3px] ${
                   isActive
-                    ? 'bg-brand-50 text-brand-500'
-                    : 'text-text-primary hover:bg-gray-50'
+                    ? 'bg-brand-50 text-brand-500 border-l-brand-500'
+                    : 'text-text-primary hover:bg-gray-50 border-l-transparent'
                 }`}
               >
                 <Icon size={18} className={isActive ? 'text-brand-500' : 'text-text-secondary'} />

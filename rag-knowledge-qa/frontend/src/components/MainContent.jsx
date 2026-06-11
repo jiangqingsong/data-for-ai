@@ -18,8 +18,10 @@ const MainContent = ({
   sessions, currentSessionId,
   onRenameSession, onExportSession, onRefreshContext,
   onRegenerate, onToggleFavorite,
-  documents, onOpenSourceDetail, onUnbindDocument,
+  onOpenSourceDetail,
   retrievalPhase, rightPanelOpen,
+  onAskAboutSelection, onSendEmpty,
+  suggestedQuestions, suggestedQuestionsLoading,
 }) => {
   const currentSession = sessions.find(s => s.id === currentSessionId);
 
@@ -37,9 +39,6 @@ const MainContent = ({
         onRenameSession={onRenameSession}
         onExportSession={onExportSession}
         onRefreshContext={onRefreshContext}
-        documents={documents}
-        onOpenSourceDetail={onOpenSourceDetail}
-        onUnbindDocument={onUnbindDocument}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -54,6 +53,10 @@ const MainContent = ({
           onToggleFavorite={onToggleFavorite}
           onOpenSourceDetail={onOpenSourceDetail}
           retrievalPhase={retrievalPhase}
+          onAskAboutSelection={onAskAboutSelection}
+          currentSessionId={currentSessionId}
+          onSendEmpty={onSendEmpty}
+          suggestedQuestions={suggestedQuestions}
         />
       </div>
 
@@ -63,6 +66,8 @@ const MainContent = ({
           onInputChange={onInputChange}
           onSend={onSend}
           isLoading={messages.some(m => m.isStreaming)}
+          suggestedQuestions={suggestedQuestions}
+          suggestedQuestionsLoading={suggestedQuestionsLoading}
         />
       )}
     </div>

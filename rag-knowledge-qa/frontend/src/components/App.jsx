@@ -5,7 +5,6 @@
  * 状态架构（迭代4）:
  * - sessions[] + currentSessionId: 多会话管理
  * - rightPanelOpen + selectedSourceData: 右侧溯源面板
- * - documents: 已绑定文档列表
  * - retrievalPhase: 检索状态区分
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
@@ -41,6 +40,7 @@ const App = () => {
   const [sessions, setSessions] = useState(() => [defaultSession]);
   const [currentSessionId, setCurrentSessionId] = useState(() => defaultSession.id);
   const [inputMessage, setInputMessage] = useState('');
+  const sessionInputCache = useRef({}); // 会话级输入缓存
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -51,13 +51,13 @@ const App = () => {
   const [knowledgeStats, setKnowledgeStats] = useState(null);
   const [isLoadingSystemData, setIsLoadingSystemData] = useState(true);
 
+  /* 动态推荐问题 */
+  const [suggestedQuestions, setSuggestedQuestions] = useState([]);
+  const [suggestedQuestionsLoading, setSuggestedQuestionsLoading] = useState(true);
+
   /* 迭代4新增: 右侧溯源面板 */
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [selectedSourceData, setSelectedSourceData] = useState(null);
-  // { filename, page, snippet, pageText, loading }
-
-  /* 迭代4新增: 已绑定文档列表 */
-  const [documents, setDocuments] = useState([]);
 
   /* 迭代4新增: 检索阶段指示 */
   const [retrievalPhase, setRetrievalPhase] = useState(null);
@@ -103,16 +103,6 @@ const App = () => {
     }
   };
 
-  /** 获取已绑定文档列表 */
-  const fetchDocuments = async () => {
-    try {
-      const data = await apiClient.getDocuments();
-      if (data?.documents) setDocuments(data.documents);
-    } catch (error) {
-      console.error('获取文档列表失败:', error);
-    }
-  };
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -125,23 +115,38 @@ const App = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      await Promise.all([fetchSystemStatus(), fetchKnowledgeStats(), fetchDocuments()]);
+      await Promise.all([fetchSystemStatus(), fetchKnowledgeStats()]);
       setIsLoadingSystemData(false);
     };
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      setSuggestedQuestionsLoading(true);
+      const data = await apiClient.getSuggestedQuestions();
+      if (data?.questions?.length > 0) {
+        setSuggestedQuestions(data.questions);
+      }
+      setSuggestedQuestionsLoading(false);
+    };
+    fetchQuestions();
+  }, []);
+
   // ========== 溯源面板控制 ==========
 
   /** 打开右侧溯源面板，加载指定文档页的原文 */
-  const handleOpenSourceDetail = useCallback(async (filename, page, snippet) => {
+  const handleOpenSourceDetail = useCallback(async (filename, page, snippet, hitPages = []) => {
     setRightPanelOpen(true);
-    setSelectedSourceData({ filename, page, snippet, pageText: null, loading: true });
+    setSelectedSourceData({ filename, page, snippet, hitPages, pageText: null, loading: true });
     try {
       const data = await apiClient.getDocumentPage(filename, page);
+      const pageText = data?.page_text || '该页无可提取文本（可能是扫描页）';
+      const totalPages = data?.total_pages ?? null;
       setSelectedSourceData(prev => ({
         ...prev,
-        pageText: data?.page_text || '该页无可提取文本（可能是扫描页）',
+        pageText,
+        totalPages,
         loading: false,
       }));
     } catch (err) {
@@ -159,11 +164,31 @@ const App = () => {
     setSelectedSourceData(null);
   }, []);
 
-  // ========== 文档管理 ==========
+  /** 基于本段提问：将原文片段填入输入框 */
+  const handleQuoteForQuestion = useCallback((snippet) => {
+    setInputMessage(snippet);
+  }, []);
 
-  /** 解绑文档 */
-  const handleUnbindDocument = useCallback((filename) => {
-    setDocuments(prev => prev.filter(d => d.filename !== filename));
+  /** 收藏本段素材：存入 localStorage */
+  const handleFavoriteSnippet = useCallback((filename, page, snippet) => {
+    const key = 'favorite_snippets';
+    try {
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      const exists = existing.some(
+        item => item.filename === filename && item.page === page
+      );
+      if (!exists) {
+        existing.push({
+          filename,
+          page,
+          snippet: snippet?.slice(0, 200) || '',
+          timestamp: new Date().toISOString(),
+        });
+        localStorage.setItem(key, JSON.stringify(existing));
+      }
+    } catch (e) {
+      console.error('收藏失败:', e);
+    }
   }, []);
 
   // ========== 聊天核心逻辑 ==========
@@ -187,9 +212,18 @@ const App = () => {
     if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
     phaseTimerRef.current = setTimeout(() => setRetrievalPhase('generating'), 1500);
 
-    const onChunk = (currentText) => {
+    const onChunk = (currentText, meta = {}) => {
       updateCurrentSessionMessages(msgs =>
-        msgs.map(msg => msg.id === streamMessageId ? { ...msg, content: currentText } : msg)
+        msgs.map(msg =>
+          msg.id === streamMessageId
+            ? {
+                ...msg,
+                content: currentText,
+                sources: meta.sources || msg.sources,
+                context_docs: meta.context_docs || msg.context_docs,
+              }
+            : msg
+        )
       );
     };
 
@@ -280,6 +314,7 @@ const App = () => {
   // ========== 会话管理 ==========
 
   const handleCreateSession = () => {
+    sessionInputCache.current[currentSessionId] = inputMessage;
     const newSession = createDefaultSession();
     setSessions(prev => [...prev, newSession]);
     setCurrentSessionId(newSession.id);
@@ -287,8 +322,9 @@ const App = () => {
   };
 
   const handleSwitchSession = (sessionId) => {
+    sessionInputCache.current[currentSessionId] = inputMessage;
     setCurrentSessionId(sessionId);
-    setInputMessage('');
+    setInputMessage(sessionInputCache.current[sessionId] || '');
   };
 
   const handleRenameSession = (sessionId, newTitle) => {
@@ -361,6 +397,37 @@ const App = () => {
     );
   };
 
+  /** 文本选中追问：填入输入框 */
+  const handleAskAboutSelection = useCallback((text) => {
+    setInputMessage(text);
+  }, []);
+
+  /** 快捷提问：直接发送问题 */
+  const handleSendQuickQuestion = useCallback((questionText) => {
+    if (!questionText.trim()) return;
+    const userMessage = {
+      id: generateId(),
+      role: 'user',
+      content: questionText,
+      timestamp: new Date().toLocaleTimeString(),
+      favorite: false,
+    };
+    updateCurrentSessionMessages(msgs => [...msgs, userMessage]);
+    setIsLoading(true);
+    setSessions(prev =>
+      prev.map(s => {
+        if (s.id !== currentSessionId) return s;
+        const isFirstQuestion = s.messages.filter(m => m.role === 'user').length === 0;
+        if (isFirstQuestion) {
+          const title = questionText.slice(0, 20) + (questionText.length > 20 ? '...' : '');
+          return { ...s, title };
+        }
+        return s;
+      })
+    );
+    executeChatStream(questionText);
+  }, [currentSessionId, updateCurrentSessionMessages, executeChatStream]);
+
   // ========== UI 事件处理 ==========
 
   const handleTabChange = (tab) => {
@@ -414,9 +481,13 @@ const App = () => {
       selectedSourceData={selectedSourceData}
       onOpenSourceDetail={handleOpenSourceDetail}
       onCloseRightPanel={handleCloseRightPanel}
-      documents={documents}
-      onUnbindDocument={handleUnbindDocument}
       retrievalPhase={retrievalPhase}
+      onQuoteForQuestion={handleQuoteForQuestion}
+      onFavoriteSnippet={handleFavoriteSnippet}
+      onAskAboutSelection={handleAskAboutSelection}
+      onSendEmpty={handleSendQuickQuestion}
+      suggestedQuestions={suggestedQuestions}
+      suggestedQuestionsLoading={suggestedQuestionsLoading}
     />
     </ToastProvider>
   );

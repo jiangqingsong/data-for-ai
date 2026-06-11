@@ -301,6 +301,24 @@ async def list_documents():
         raise HTTPException(status_code=500, detail=f"获取文档列表失败: {str(e)}")
 
 
+def _clean_page_text(text: str) -> str:
+    """清洗PDF提取文本：移除乱码字符，保留教材原有分段和标题层级"""
+    import re
+
+    # 移除连续的特殊字符（2个以上连续的非中英文/数字/标点符号）
+    text = re.sub(r'[!#$%&*@^~{}|\\<>?/\'"]{2,}', '', text)
+    # 移除孤立的特殊字符（前后无中英文的单个特殊字符）
+    text = re.sub(r'(?<![一-龥a-zA-Z0-9])([!#$%&*])(?![一-龥a-zA-Z0-9])', '', text)
+    # 合并3个以上连续空行为双空行（保留段落间距）
+    text = re.sub(r'\n{4,}', '\n\n\n', text)
+    # 移除行首尾多余空格但保留缩进
+    text = re.sub(r'[ \t]+$', '', text, flags=re.MULTILINE)
+    # 压缩多个空格为单个（保留中文间无空格特性）
+    text = re.sub(r' {2,}', ' ', text)
+
+    return text.strip()
+
+
 @app.get("/api/document/page")
 async def get_document_page(filename: str, page: int = 0):
     """获取指定文档指定页的原文内容"""
@@ -349,7 +367,7 @@ async def get_document_page(filename: str, page: int = 0):
             doc.close()
             raise HTTPException(status_code=400, detail=f"页码超出范围: {page} (共 {total_pages} 页)")
 
-        page_text = doc[page].get_text()
+        page_text = _clean_page_text(doc[page].get_text())
         doc.close()
 
         return {
@@ -363,6 +381,146 @@ async def get_document_page(filename: str, page: int = 0):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取页面内容失败: {str(e)}")
+
+
+@app.get("/api/knowledge/suggested-questions")
+async def get_suggested_questions():
+    """从已索引的PDF教材中提取章节标题，生成推荐问题列表
+
+    实现逻辑：
+      1. 遍历 PDF 目录下的所有 PDF 文件
+      2. 用 pymupdf 提取 TOC（目录）中的章节标题
+      3. 过滤噪音（水印、前言、目录页等）
+      4. 将章节标题转化为自然语言问句
+      5. TOC 质量差时回退到文本模式：匹配 "第X章" 等标题行
+    """
+    try:
+        from src.config import Config
+        import os
+        import glob
+        import fitz
+        import re
+
+        pdf_dir = Config.PDF_DIR
+        if not os.path.isabs(pdf_dir):
+            pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+
+        pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))
+        if not pdf_files:
+            return {"questions": [], "source": "无已索引文档"}
+
+        # 噪音关键词（水印、出版信息、非教学内容）
+        NOISE_PATTERNS = [
+            r'微信', r'公众号', r'电子课本', r'大全',
+            r'主编', r'出版', r'ISBN', r'版权', r'前言',
+            r'目录', r'索引', r'附录', r'参考',
+            r'同学们', r'欢迎',
+            r'^\d+$',  # 纯数字
+            r'^[·\s]+$',  # 纯标点/空格
+        ]
+        noise_re = re.compile('|'.join(NOISE_PATTERNS))
+
+        # 控制字符/PDF 内嵌字体垃圾
+        GARBAGE_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
+
+        # 章节标题特征模式
+        CHAPTER_PATTERNS = [
+            re.compile(r'^第[一二三四五六七八九十\d]+章\s*'),
+            re.compile(r'^第[一二三四五六七八九十\d]+节\s*'),
+            re.compile(r'^\d+[\.\s、]+\d+[\.\s、]+'),  # 1.1 1.2
+            re.compile(r'^\d+[\.\s、]+'),  # 1. 2.
+        ]
+
+        def is_noise(text):
+            if bool(noise_re.search(text)):
+                return True
+            # 过滤含控制字符的行（PDF字体编码垃圾）
+            if GARBAGE_RE.search(text):
+                return True
+            # 过滤汉字占比过低的（内嵌字体乱码）
+            chinese = len(re.findall(r'[一-鿿]', text))
+            total = len(text.replace(' ', ''))
+            if total > 10 and chinese / max(total, 1) < 0.2:
+                return True
+            return False
+
+        def is_chapter_title(text):
+            clean = text.strip()
+            if len(clean) < 4 or len(clean) > 50:
+                return False
+            if is_noise(clean):
+                return False
+            # 至少匹配一种章节模式
+            for pat in CHAPTER_PATTERNS:
+                if pat.match(clean):
+                    return True
+            return False
+
+        titles = []
+
+        for filepath in pdf_files:
+            doc = fitz.open(filepath)
+            toc = doc.get_toc()
+            toc_quality = 0
+
+            if toc and len(toc) > 0:
+                for item in toc:
+                    level, title, page = item[0], item[1], item[2]
+                    if level > 2:
+                        continue
+                    clean = title.strip()
+                    if is_chapter_title(clean):
+                        # 去掉编号前缀保留标题文字
+                        for pat in CHAPTER_PATTERNS:
+                            clean = pat.sub('', clean)
+                        clean = clean.strip()
+                        if clean and clean not in titles and not is_noise(clean):
+                            titles.append(clean)
+                            toc_quality += 1
+
+            # TOC 质量不够 → 回退到文本扫描
+            if toc_quality < 3:
+                for page_num in range(min(20, len(doc))):
+                    text = doc[page_num].get_text()
+                    lines = [l.strip() for l in text.split('\n') if l.strip()]
+                    for line in lines:
+                        if is_chapter_title(line):
+                            clean = line.strip()
+                            for pat in CHAPTER_PATTERNS:
+                                clean = pat.sub('', clean)
+                            clean = clean.strip()
+                            if clean and clean not in titles and not is_noise(clean):
+                                titles.append(clean)
+
+            doc.close()
+
+        # 去重
+        seen = set()
+        unique_titles = []
+        for t in titles:
+            if t not in seen:
+                seen.add(t)
+                unique_titles.append(t)
+
+        # 转为问句形式，取前8个
+        questions = []
+        question_prefixes = ["什么是", "如何理解", "怎样计算", "简述", "请解释"]
+        for i, title in enumerate(unique_titles[:8]):
+            prefix = question_prefixes[i % len(question_prefixes)]
+            if title.endswith('？') or title.endswith('?'):
+                questions.append(title)
+            elif len(title) > 15:
+                questions.append(f"请介绍：{title}")
+            else:
+                questions.append(f"{prefix}{title}？")
+
+        return {
+            "questions": questions,
+            "source": f"来自 {len(pdf_files)} 本教材目录",
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取推荐问题失败: {str(e)}")
 
 
 if __name__ == "__main__":

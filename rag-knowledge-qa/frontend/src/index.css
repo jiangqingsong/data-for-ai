@@ -111,6 +111,135 @@ select {
   }
 }
 
-.animate-toastIn {
-  animation: toastIn 0.3s ease-out;
+/* line-clamp 展开/折叠过渡 */
+.line-clamp-8 {
+  transition: max-height 0.3s ease;
+}
+
+/* ================================================================
+   对话气泡视觉升级 — 对标豆包柔和低饱和风格
+   ================================================================ */
+
+/* -- 用户提问气泡（浅蓝低饱和护眼风格） -- */
+.bubble-user {
+  background: linear-gradient(180deg, #F0F7FF 0%, #E6F0FF 100%);
+  border-radius: 12px;
+  border: 1px solid #D0E4FF;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  padding: 14px 18px 16px 18px;
+  transition: background-color 0.2s ease;
+}
+.bubble-user:hover {
+  background: #D0E4FF;
+}
+
+/* -- AI 回答气泡 -- */
+.bubble-ai {
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 14px 20px 16px 20px;
+}
+
+/* -- 内联引用标签 -- */
+.ref-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  background: #E8F3FF;
+  color: #1677FF;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  margin: 0 4px;
+  transition: background-color 0.2s ease;
+  border: none;
+}
+.ref-tag:hover {
+  background: #D0E7FF;
+}
+
+/* -- 气泡右侧悬浮操作栏容器 -- */
+.bubble-toolbar {
+  background: #FFFFFF;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* -- 工具栏单个按钮 -- */
+.toolbar-btn {
+  padding: 8px;
+  border-radius: 6px;
+  color: #86909C;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.toolbar-btn:hover {
+  background: #E8F3FF;
+  color: #1677FF;
+}
+.toolbar-btn-fav-active {
+  color: #F59E0B;
+}
+.toolbar-btn-fav-active:hover {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+/* -- 时间戳弱化 -- */
+.bubble-timestamp {
+  font-size: 12px;
+  line-height: 18px;
+  color: rgba(0, 0, 0, 0.28);
+}
+.bubble-timestamp-ai {
+  font-size: 12px;
+  line-height: 18px;
+  color: #C0C4CC;
+}
+
+/* -- 气泡hover时在底部外侧显示的时间戳 -- */
+.bubble-timestamp-hover {
+  position: absolute;
+  bottom: -22px;
+  right: 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: #86909C;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* -- 参考来源折叠按钮 -- */
+.source-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: #1677FF;
+  transition: all 0.2s ease;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-left: -8px;
+}
+.source-toggle-btn:hover {
+  background: #E8F3FF;
+}
+
+/* 折叠箭头旋转动画 */
+.chevron-icon {
+  transition: transform 0.25s ease;
+}
+.chevron-icon.expanded {
+  transform: rotate(180deg);
 }

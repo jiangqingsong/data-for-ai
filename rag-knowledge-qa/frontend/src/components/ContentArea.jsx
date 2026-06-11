@@ -13,11 +13,15 @@ const ContentArea = ({
   knowledgeStats, systemStatus, isLoadingSystemData,
   onRegenerate, onToggleFavorite,
   onOpenSourceDetail, retrievalPhase,
+  onAskAboutSelection, currentSessionId, onSendEmpty,
+  suggestedQuestions,
 }) => {
   const chatViewProps = {
     messages, messagesEndRef,
     onRegenerate, onToggleFavorite,
     onOpenSourceDetail, retrievalPhase,
+    onAskAboutSelection, currentSessionId, onSendEmpty,
+    suggestedQuestions,
   };
 
   switch (activeTab) {

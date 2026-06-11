@@ -1,17 +1,15 @@
 /**
  * TopBar - 中栏顶部操作栏
- * 会话标题可点击编辑 | 动态文档卡片 | 导出/刷新/高级设置
- * 迭代5：集成 Toast
+ * 会话标题可点击编辑 | 导出/刷新/高级设置
  */
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, RefreshCw, Download, Settings, X, FileText } from 'lucide-react';
+import { ChevronDown, ChevronUp, RefreshCw, Download, Settings } from 'lucide-react';
 import { useToast } from './Toast';
 
 const TopBar = ({
   activeTab, showAdvancedSettings, onToggleAdvanced,
   topK, onTopKChange, retrievalStrategy, onStrategyChange,
   currentSession, onRenameSession, onExportSession, onRefreshContext,
-  documents, onOpenSourceDetail, onUnbindDocument,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -21,14 +19,12 @@ const TopBar = ({
   const displayTitle = activeTab === 'chat' && currentSession
     ? currentSession.title : tabTitles[activeTab] || '问答对话';
 
-  /** 进入标题编辑 */
   const startTitleEdit = () => {
     if (activeTab !== 'chat' || !currentSession) return;
     setEditTitle(currentSession.title);
     setIsEditingTitle(true);
   };
 
-  /** 提交标题编辑 */
   const submitTitleEdit = () => {
     if (editTitle.trim() && currentSession) {
       onRenameSession(currentSession.id, editTitle.trim());
@@ -37,13 +33,11 @@ const TopBar = ({
     setEditTitle('');
   };
 
-  /** 标题编辑键盘事件 */
   const handleTitleKeyDown = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); submitTitleEdit(); }
     else if (e.key === 'Escape') { setIsEditingTitle(false); setEditTitle(''); }
   };
 
-  /** 导出对话 + Toast */
   const handleExport = () => {
     onExportSession();
     showToast('对话已导出', 'success');
@@ -51,7 +45,7 @@ const TopBar = ({
 
   return (
     <div className="border-b border-border bg-surface-white">
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex items-center justify-between px-6 py-3">
         {/* 左侧：会话标题 */}
         <div className="flex items-center gap-3 min-w-0">
           {isEditingTitle ? (
@@ -71,33 +65,6 @@ const TopBar = ({
               {displayTitle}
             </h2>
           )}
-        </div>
-
-        {/* 中部：绑定文档卡片区 */}
-        <div className="flex items-center gap-2 min-w-0 flex-1 mx-4">
-          <span className="text-caption text-text-secondary flex-shrink-0">绑定文档:</span>
-          <div className="flex gap-2 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
-            {documents.length === 0 ? (
-              <span className="text-caption text-text-secondary italic">未绑定文档</span>
-            ) : (
-              documents.map((doc) => (
-                <div key={doc.filename}
-                  className="group flex items-center gap-1 px-2 py-0.5 bg-brand-50 text-brand-500 rounded-element border border-brand-100 flex-shrink-0 cursor-pointer hover:bg-brand-100 transition-colors"
-                  onClick={() => onOpenSourceDetail(doc.filename, 0)}
-                  title={`${doc.filename}（${doc.page_count} 页）— 点击预览`}>
-                  <FileText size={12} />
-                  <span className="text-caption max-w-[140px] truncate">{doc.filename}</span>
-                  <span className="text-caption text-text-secondary">({doc.page_count}页)</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onUnbindDocument(doc.filename); }}
-                    className="p-0.5 rounded text-text-secondary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                    title="解绑文档">
-                    <X size={12} />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
         </div>
 
         {/* 右侧：功能按钮区 */}

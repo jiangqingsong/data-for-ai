@@ -26,8 +26,10 @@ const ThreeColumnLayout = ({
   /* 迭代4: 溯源面板 */
   rightPanelOpen, selectedSourceData,
   onOpenSourceDetail, onCloseRightPanel,
-  documents, onUnbindDocument,
   retrievalPhase,
+  onQuoteForQuestion, onFavoriteSnippet,
+  onAskAboutSelection, onSendEmpty,
+  suggestedQuestions, suggestedQuestionsLoading,
 }) => {
   return (
     <div className="flex h-screen bg-surface-page">
@@ -80,11 +82,14 @@ const ThreeColumnLayout = ({
         onRefreshContext={onRefreshContext}
         onRegenerate={onRegenerate}
         onToggleFavorite={onToggleFavorite}
-        documents={documents}
         onOpenSourceDetail={onOpenSourceDetail}
-        onUnbindDocument={onUnbindDocument}
         retrievalPhase={retrievalPhase}
         rightPanelOpen={rightPanelOpen}
+        onAskAboutSelection={onAskAboutSelection}
+        currentSessionId={currentSessionId}
+        onSendEmpty={onSendEmpty}
+        suggestedQuestions={suggestedQuestions}
+        suggestedQuestionsLoading={suggestedQuestionsLoading}
       />
 
       {/* 右栏：溯源面板 380px，按需显示 */}
@@ -93,6 +98,9 @@ const ThreeColumnLayout = ({
         sourceData={selectedSourceData}
         onClose={onCloseRightPanel}
         onOpenFullDocument={downloadPDF}
+        onQuoteForQuestion={onQuoteForQuestion}
+        onFavoriteSnippet={onFavoriteSnippet}
+        onOpenSourceDetail={onOpenSourceDetail}
       />
     </div>
   );

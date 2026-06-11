@@ -51,9 +51,9 @@ const SessionList = ({
   return (
     <div className="flex-1 overflow-y-auto px-2 py-2">
       {/* 新建对话按钮 */}
-      <button onClick={onCreateSession}
-        className="w-full flex items-center gap-2 px-3 py-2 text-body text-text-primary hover:bg-gray-50 rounded-element transition-colors">
-        <Plus size={16} className="text-text-secondary" />
+      <button onClick={() => { onCreateSession(); showToast('已创建新对话', 'success'); }}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 text-body font-medium bg-brand-500 text-white hover:bg-brand-600 rounded-element transition-colors">
+        <Plus size={16} />
         <span>新建对话</span>
       </button>
 

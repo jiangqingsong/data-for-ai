@@ -142,6 +142,8 @@ class ApiClient {
 
                 // 模拟流式输出
                 const answer = cachedResult.answer;
+                const sources = cachedResult.sources;
+                const contextDocs = cachedResult.context_docs;
                 let currentText = '';
                 let index = 0;
                 const speed = 20; // 每个字符的延迟时间(ms)
@@ -152,14 +154,14 @@ class ApiClient {
                         currentText += answer[index];
                         index++;
 
-                        // 触发回调
-                        onChunk(currentText, { isFinal: false });
+                        // 触发回调 — 携带 sources/context_docs 元数据
+                        onChunk(currentText, { isFinal: false, sources, context_docs: contextDocs });
 
                         // 继续下一个字符
                         setTimeout(simulateStream, speed);
                     } else {
                         // 完成
-                        onChunk(currentText, { isFinal: true });
+                        onChunk(currentText, { isFinal: true, sources, context_docs: contextDocs });
                         onComplete({ ...cachedResult, answer: currentText });
                     }
                 };
@@ -172,6 +174,8 @@ class ApiClient {
             // 如果没有缓存，使用普通请求然后模拟流
             const result = await this.chat(question, top_k, search_type);
             const answer = result.answer;
+            const sources = result.sources;
+            const contextDocs = result.context_docs;
             let currentText = '';
             let index = 0;
             const speed = 20;
@@ -180,10 +184,10 @@ class ApiClient {
                 if (index < answer.length) {
                     currentText += answer[index];
                     index++;
-                    onChunk(currentText, { isFinal: false });
+                    onChunk(currentText, { isFinal: false, sources, context_docs: contextDocs });
                     setTimeout(simulateStream, speed);
                 } else {
-                    onChunk(currentText, { isFinal: true });
+                    onChunk(currentText, { isFinal: true, sources, context_docs: contextDocs });
                     onComplete(result);
                 }
             };
@@ -242,6 +246,18 @@ class ApiClient {
         } catch (error) {
             console.error('获取页面内容失败:', error);
             return null;
+        }
+    }
+
+    /**
+     * 获取推荐问题（从教材目录提取）
+     */
+    async getSuggestedQuestions() {
+        try {
+            return await this.request('GET', '/knowledge/suggested-questions');
+        } catch (error) {
+            console.error('获取推荐问题失败:', error);
+            return { questions: [], source: '' };
         }
     }
 
