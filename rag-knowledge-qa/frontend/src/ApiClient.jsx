@@ -100,9 +100,9 @@ class ApiClient {
     /**
      * 聊天请求
      */
-    async chat(question, top_k = 4, search_type = 'similarity') {
+    async chat(question, top_k = 4, search_type = 'similarity', subdir = null) {
         // 先检查缓存
-        const cachedResult = chatCache.get(question, top_k, search_type);
+        const cachedResult = chatCache.get(question, top_k, search_type, subdir);
         if (cachedResult) {
             console.log('使用缓存结果');
             return cachedResult;
@@ -112,11 +112,12 @@ class ApiClient {
             const result = await this.request('POST', '/chat', {
                 question,
                 top_k,
-                search_type
+                search_type,
+                subdir,
             });
 
             // 缓存结果
-            chatCache.set(question, top_k, search_type, result);
+            chatCache.set(question, top_k, search_type, result, subdir);
 
             return result;
         } catch (error) {
@@ -133,10 +134,10 @@ class ApiClient {
      * @param {function} onComplete - 完成回调
      * @param {function} onError - 错误回调
      */
-    async chatStream(question, top_k = 4, search_type = 'similarity', onChunk, onComplete, onError) {
+    async chatStream(question, top_k = 4, search_type = 'similarity', onChunk, onComplete, onError, subdir = null) {
         try {
             // 先检查缓存
-            const cachedResult = chatCache.get(question, top_k, search_type);
+            const cachedResult = chatCache.get(question, top_k, search_type, subdir);
             if (cachedResult) {
                 console.log('使用缓存结果进行流式模拟');
 
@@ -172,7 +173,7 @@ class ApiClient {
             }
 
             // 如果没有缓存，使用普通请求然后模拟流
-            const result = await this.chat(question, top_k, search_type);
+            const result = await this.chat(question, top_k, search_type, subdir);
             const answer = result.answer;
             const sources = result.sources;
             const contextDocs = result.context_docs;
@@ -258,6 +259,113 @@ class ApiClient {
         } catch (error) {
             console.error('获取推荐问题失败:', error);
             return { questions: [], source: '' };
+        }
+    }
+
+    /**
+     * 获取知识库列表
+     */
+    async getKnowledgeBases() {
+        try {
+            return await this.request('GET', '/knowledge-bases');
+        } catch (error) {
+            console.error('获取知识库列表失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 创建知识库
+     * @param {string} name - 知识库名称
+     */
+    async createKnowledgeBase(name) {
+        try {
+            return await this.request('POST', '/knowledge-bases', { name });
+        } catch (error) {
+            console.error('创建知识库失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 删除知识库
+     * @param {string} name - 知识库名称
+     */
+    async deleteKnowledgeBase(name) {
+        try {
+            return await this.request('DELETE', `/knowledge-bases/${encodeURIComponent(name)}`);
+        } catch (error) {
+            console.error('删除知识库失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 获取单个知识库统计
+     * @param {string} name - 知识库名称
+     */
+    async getKnowledgeBaseStats(name) {
+        try {
+            return await this.request('GET', `/knowledge-bases/${encodeURIComponent(name)}/stats`);
+        } catch (error) {
+            console.error('获取知识库统计失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 上传文档到知识库
+     * @param {string} name - 知识库名称
+     * @param {File} file - PDF 文件
+     */
+    async uploadDocumentToKB(name, file) {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const url = `${API_BASE_URL}/knowledge-bases/${encodeURIComponent(name)}/upload`;
+            const response = await this.requestWithRetry(url, {
+                method: 'POST',
+                body: formData,
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                try {
+                    const errorData = JSON.parse(errorText);
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                } catch {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('上传文档失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 触发知识库 Pipeline
+     * @param {string} name - 知识库名称
+     */
+    async triggerPipeline(name) {
+        try {
+            return await this.request('POST', `/knowledge-bases/${encodeURIComponent(name)}/pipeline`);
+        } catch (error) {
+            console.error('触发 Pipeline 失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 查询 Pipeline 运行状态
+     * @param {string} name - 知识库名称
+     */
+    async getPipelineStatus(name) {
+        try {
+            return await this.request('GET', `/knowledge-bases/${encodeURIComponent(name)}/pipeline/status`);
+        } catch (error) {
+            console.error('查询 Pipeline 状态失败:', error);
+            return null;
         }
     }
 

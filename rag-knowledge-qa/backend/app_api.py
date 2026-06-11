@@ -3,15 +3,22 @@
 提供 RESTful API 接口，供前端界面调用
 """
 from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from pydantic import BaseModel
 import os
+import shutil
+import glob
+import re
+import fitz
+from datetime import datetime
 from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
 
 # 导入优化配置
 from fast_api_optimizations import create_optimized_app, async_cached_function
 
 from src.rag_chain import RAGChain
+from src.retriever import Retriever
 from src.config import Config
 
 
@@ -53,6 +60,25 @@ class SystemStatusResponse(BaseModel):
     vector_count: int
     document_count: int
     ragas_scores: Dict[str, float]
+
+
+class KnowledgeBaseInfo(BaseModel):
+    """知识库信息"""
+    name: str
+    doc_count: int
+    vector_count: int
+    created_at: str
+
+
+class CreateKBRequest(BaseModel):
+    """创建知识库请求"""
+    name: str
+
+
+# Pipeline 运行状态追踪
+_running_pipelines: Dict[str, bool] = {}
+_pipeline_progress: Dict[str, dict] = {}
+_pipeline_executor = ThreadPoolExecutor(max_workers=2)
 
 
 @app.on_event("startup")
@@ -521,6 +547,314 @@ async def get_suggested_questions():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取推荐问题失败: {str(e)}")
+
+
+# ============================================================
+# 知识库管理 API
+# ============================================================
+
+def _validate_kb_name(name: str) -> str:
+    """校验知识库名称，返回错误信息或空字符串"""
+    if not name or not name.strip():
+        return "知识库名称不能为空"
+    name = name.strip()
+    if any(c in name for c in ['/', '\\', '..']):
+        return "知识库名称包含非法字符"
+    if len(name) > 50:
+        return "知识库名称不能超过50个字符"
+    return ""
+
+
+def _get_kb_stats(name: str) -> dict:
+    """获取单个知识库的文档数和向量数"""
+    pdf_dir = Config.get_pdf_dir(name)
+    documents = []
+    doc_count = 0
+    if os.path.isdir(pdf_dir):
+        pdf_files = sorted(glob.glob(os.path.join(pdf_dir, "*.pdf")))
+        doc_count = len(pdf_files)
+        for fp in pdf_files:
+            fname = os.path.basename(fp)
+            fsize = os.path.getsize(fp)
+            pages = 0
+            try:
+                doc = fitz.open(fp)
+                pages = len(doc)
+                doc.close()
+            except Exception:
+                pass
+            documents.append({
+                "filename": fname,
+                "size_bytes": fsize,
+                "page_count": pages,
+            })
+
+    vector_count = 0
+    chunks = []
+    try:
+        r = Retriever(subdir=name)
+        vector_count = r.get_vector_count()
+        collection_data = r.vectorstore._collection.get(include=["metadatas", "documents"])
+        if collection_data and collection_data.get("ids"):
+            for i, cid in enumerate(collection_data["ids"]):
+                meta = (collection_data["metadatas"] or [{}])[i] if collection_data.get("metadatas") else {}
+                text = (collection_data["documents"] or [""])[i] if collection_data.get("documents") else ""
+                chunks.append({
+                    "id": cid,
+                    "content": (text or "")[:200],
+                    "source": meta.get("source", ""),
+                    "page": meta.get("page", ""),
+                })
+    except Exception:
+        pass
+
+    return {
+        "doc_count": doc_count,
+        "vector_count": vector_count,
+        "documents": documents,
+        "chunks": chunks,
+    }
+
+
+@app.get("/api/knowledge-bases")
+async def list_knowledge_bases():
+    """列出所有知识库"""
+    try:
+        pdf_base = Config.PDF_BASE_DIR
+        if not os.path.isabs(pdf_base):
+            pdf_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_base)
+
+        if not os.path.isdir(pdf_base):
+            return {"knowledge_bases": []}
+
+        kbs = []
+        for entry in sorted(os.listdir(pdf_base)):
+            entry_path = os.path.join(pdf_base, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            # 跳过隐藏目录和非知识库目录
+            if entry.startswith('.'):
+                continue
+
+            stats = _get_kb_stats(entry)
+            kbs.append(KnowledgeBaseInfo(
+                name=entry,
+                doc_count=stats["doc_count"],
+                vector_count=stats["vector_count"],
+                created_at=datetime.fromtimestamp(os.path.getctime(entry_path)).isoformat(),
+            ))
+
+        return {"knowledge_bases": [kb.model_dump() for kb in kbs]}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取知识库列表失败: {str(e)}")
+
+
+@app.post("/api/knowledge-bases")
+async def create_knowledge_base(request: CreateKBRequest):
+    """创建新知识库"""
+    try:
+        name = request.name.strip()
+        err = _validate_kb_name(name)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+
+        pdf_base = Config.PDF_BASE_DIR
+        if not os.path.isabs(pdf_base):
+            pdf_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_base)
+
+        pdf_dir = os.path.join(pdf_base, name)
+        chroma_dir = Config.get_chroma_dir(name)
+        if not os.path.isabs(chroma_dir):
+            chroma_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), chroma_dir)
+
+        if os.path.exists(pdf_dir):
+            raise HTTPException(status_code=409, detail=f"知识库 '{name}' 已存在")
+
+        os.makedirs(pdf_dir, exist_ok=True)
+        os.makedirs(chroma_dir, exist_ok=True)
+
+        return {"name": name, "status": "created"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建知识库失败: {str(e)}")
+
+
+@app.delete("/api/knowledge-bases/{name}")
+async def delete_knowledge_base(name: str):
+    """删除知识库及其所有数据"""
+    try:
+        err = _validate_kb_name(name)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+
+        pdf_base = Config.PDF_BASE_DIR
+        if not os.path.isabs(pdf_base):
+            pdf_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_base)
+
+        pdf_dir = os.path.join(pdf_base, name)
+        chroma_dir = Config.get_chroma_dir(name)
+        if not os.path.isabs(chroma_dir):
+            chroma_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), chroma_dir)
+
+        if not os.path.exists(pdf_dir):
+            raise HTTPException(status_code=404, detail=f"知识库 '{name}' 不存在")
+
+        shutil.rmtree(pdf_dir)
+        if os.path.exists(chroma_dir):
+            shutil.rmtree(chroma_dir, ignore_errors=True)
+
+        return {"name": name, "status": "deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除知识库失败: {str(e)}")
+
+
+@app.get("/api/knowledge-bases/{name}/stats")
+async def get_knowledge_base_stats(name: str):
+    """获取单个知识库统计"""
+    try:
+        err = _validate_kb_name(name)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+
+        stats = _get_kb_stats(name)
+        return {"name": name, **stats}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取知识库统计失败: {str(e)}")
+
+
+@app.post("/api/knowledge-bases/{name}/upload")
+async def upload_document_to_kb(name: str, file: UploadFile = File(...)):
+    """上传PDF到指定知识库"""
+    try:
+        err = _validate_kb_name(name)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+
+        if not file.filename or not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(status_code=400, detail="仅支持上传 PDF 文件")
+
+        # 安全文件名
+        safe_name = os.path.basename(file.filename)
+        safe_name = re.sub(r'[^一-龥a-zA-Z0-9.\-_（）()]', '', safe_name)
+        if not safe_name:
+            raise HTTPException(status_code=400, detail="文件名无效")
+
+        pdf_dir = Config.get_pdf_dir(name)
+        if not os.path.isabs(pdf_dir):
+            pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+        os.makedirs(pdf_dir, exist_ok=True)
+
+        filepath = os.path.join(pdf_dir, safe_name)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+
+        # 获取页数
+        page_count = 0
+        try:
+            doc = fitz.open(filepath)
+            page_count = len(doc)
+            doc.close()
+        except Exception:
+            pass
+
+        return {
+            "filename": safe_name,
+            "size_bytes": len(content),
+            "page_count": page_count,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"上传文件失败: {str(e)}")
+
+
+@app.post("/api/knowledge-bases/{name}/pipeline")
+async def trigger_pipeline(name: str):
+    """手动触发知识库 Pipeline"""
+    try:
+        err = _validate_kb_name(name)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+
+        if _running_pipelines.get(name):
+            raise HTTPException(status_code=409, detail=f"知识库 '{name}' 的 Pipeline 正在运行中")
+
+        pdf_dir = Config.get_pdf_dir(name)
+        if not os.path.isabs(pdf_dir):
+            pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+
+        pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))
+        if not pdf_files:
+            raise HTTPException(status_code=400, detail=f"知识库 '{name}' 中没有 PDF 文件")
+
+        _running_pipelines[name] = True
+        _pipeline_progress[name] = {"step": "starting", "message": "正在启动 Pipeline...", "progress_pct": 0}
+
+        def _run():
+            try:
+                from src.pipeline import load_pdfs, clean_documents, split_documents, build_vectorstore
+
+                _pipeline_progress[name] = {"step": "loading", "message": "正在加载 PDF...", "progress_pct": 5}
+                docs = load_pdfs(pdf_dir)
+                if not docs:
+                    _pipeline_progress[name] = {"step": "error", "message": "未找到可处理的 PDF 文件", "progress_pct": 0}
+                    return
+
+                _pipeline_progress[name] = {"step": "cleaning", "message": "正在清洗文本...", "progress_pct": 25}
+                docs = clean_documents(docs)
+
+                _pipeline_progress[name] = {"step": "splitting", "message": "正在分块...", "progress_pct": 45}
+                chunks = split_documents(docs)
+
+                _pipeline_progress[name] = {"step": "embedding", "message": f"正在向量化（共 {len(chunks)} 个块，可能需要几分钟）...", "progress_pct": 60}
+                chroma_dir = Config.get_chroma_dir(name)
+                build_vectorstore(chunks, chroma_dir)
+
+                _pipeline_progress[name] = {"step": "done", "message": f"Pipeline 完成 — {len(docs)} 页 → {len(chunks)} 个向量块", "progress_pct": 100}
+            except Exception as e:
+                _pipeline_progress[name] = {"step": "error", "message": f"Pipeline 失败: {str(e)}", "progress_pct": 0}
+            finally:
+                _running_pipelines[name] = False
+
+        _pipeline_executor.submit(_run)
+
+        return {"status": "started", "name": name}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _running_pipelines.pop(name, None)
+        raise HTTPException(status_code=500, detail=f"启动 Pipeline 失败: {str(e)}")
+
+
+@app.get("/api/knowledge-bases/{name}/pipeline/status")
+async def get_pipeline_status(name: str):
+    """查询 Pipeline 运行状态和进度"""
+    err = _validate_kb_name(name)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    is_running = _running_pipelines.get(name, False)
+    progress = _pipeline_progress.get(name, {"step": "idle", "message": "", "progress_pct": 0})
+
+    return {
+        "name": name,
+        "is_running": is_running,
+        "step": progress.get("step", "idle"),
+        "message": progress.get("message", ""),
+        "progress_pct": progress.get("progress_pct", 0),
+    }
 
 
 if __name__ == "__main__":

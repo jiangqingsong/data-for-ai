@@ -30,6 +30,12 @@ const ThreeColumnLayout = ({
   onQuoteForQuestion, onFavoriteSnippet,
   onAskAboutSelection, onSendEmpty,
   suggestedQuestions, suggestedQuestionsLoading,
+  /* 迭代5: 知识库管理 */
+  knowledgeBases, selectedKBName, selectedKBStats,
+  isKBLoading, onCreateKB, onDeleteKB,
+  onSelectKB, onUploadDocument, onTriggerPipeline,
+  /* 问答知识库选择 */
+  selectedChatKB, onChatKBChange,
 }) => {
   return (
     <div className="flex h-screen bg-surface-page">
@@ -86,10 +92,22 @@ const ThreeColumnLayout = ({
         retrievalPhase={retrievalPhase}
         rightPanelOpen={rightPanelOpen}
         onAskAboutSelection={onAskAboutSelection}
-        currentSessionId={currentSessionId}
         onSendEmpty={onSendEmpty}
         suggestedQuestions={suggestedQuestions}
         suggestedQuestionsLoading={suggestedQuestionsLoading}
+        /* 迭代5: 知识库管理 */
+        knowledgeBases={knowledgeBases}
+        selectedKBName={selectedKBName}
+        selectedKBStats={selectedKBStats}
+        isKBLoading={isKBLoading}
+        onCreateKB={onCreateKB}
+        onDeleteKB={onDeleteKB}
+        onSelectKB={onSelectKB}
+        onUploadDocument={onUploadDocument}
+        onTriggerPipeline={onTriggerPipeline}
+        /* 问答知识库选择 */
+        selectedChatKB={selectedChatKB}
+        onChatKBChange={onChatKBChange}
       />
 
       {/* 右栏：溯源面板 380px，按需显示 */}

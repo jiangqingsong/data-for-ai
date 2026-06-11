@@ -22,6 +22,12 @@ const MainContent = ({
   retrievalPhase, rightPanelOpen,
   onAskAboutSelection, onSendEmpty,
   suggestedQuestions, suggestedQuestionsLoading,
+  /* 迭代5: 知识库管理 */
+  knowledgeBases, selectedKBName, selectedKBStats,
+  isKBLoading, onCreateKB, onDeleteKB,
+  onSelectKB, onUploadDocument, onTriggerPipeline,
+  /* 问答知识库选择 */
+  selectedChatKB, onChatKBChange,
 }) => {
   const currentSession = sessions.find(s => s.id === currentSessionId);
 
@@ -39,6 +45,10 @@ const MainContent = ({
         onRenameSession={onRenameSession}
         onExportSession={onExportSession}
         onRefreshContext={onRefreshContext}
+        /* 问答知识库选择 */
+        selectedChatKB={selectedChatKB}
+        onChatKBChange={onChatKBChange}
+        knowledgeBases={knowledgeBases}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -57,6 +67,16 @@ const MainContent = ({
           currentSessionId={currentSessionId}
           onSendEmpty={onSendEmpty}
           suggestedQuestions={suggestedQuestions}
+          /* 迭代5: 知识库管理 */
+          knowledgeBases={knowledgeBases}
+          selectedKBName={selectedKBName}
+          selectedKBStats={selectedKBStats}
+          isKBLoading={isKBLoading}
+          onCreateKB={onCreateKB}
+          onDeleteKB={onDeleteKB}
+          onSelectKB={onSelectKB}
+          onUploadDocument={onUploadDocument}
+          onTriggerPipeline={onTriggerPipeline}
         />
       </div>
 

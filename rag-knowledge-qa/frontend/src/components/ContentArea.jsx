@@ -15,6 +15,10 @@ const ContentArea = ({
   onOpenSourceDetail, retrievalPhase,
   onAskAboutSelection, currentSessionId, onSendEmpty,
   suggestedQuestions,
+  /* 迭代5: 知识库管理 */
+  knowledgeBases, selectedKBName, selectedKBStats,
+  isKBLoading, onCreateKB, onDeleteKB,
+  onSelectKB, onUploadDocument, onTriggerPipeline,
 }) => {
   const chatViewProps = {
     messages, messagesEndRef,
@@ -28,7 +32,17 @@ const ContentArea = ({
     case 'chat':
       return <ChatView {...chatViewProps} />;
     case 'knowledge':
-      return <KnowledgeView knowledgeStats={knowledgeStats} isLoadingSystemData={isLoadingSystemData} />;
+      return <KnowledgeView
+        knowledgeBases={knowledgeBases}
+        selectedKBName={selectedKBName}
+        selectedKBStats={selectedKBStats}
+        isKBLoading={isKBLoading}
+        onCreateKB={onCreateKB}
+        onDeleteKB={onDeleteKB}
+        onSelectKB={onSelectKB}
+        onUploadDocument={onUploadDocument}
+        onTriggerPipeline={onTriggerPipeline}
+      />;
     case 'system':
       return <SystemView systemStatus={systemStatus} isLoadingSystemData={isLoadingSystemData} />;
     default:

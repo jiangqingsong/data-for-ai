@@ -32,13 +32,13 @@ const LeftSidebar = ({
     >
       <div className="flex flex-col h-full">
         {/* 侧边栏头部 */}
-        <div className="border-b border-border p-4 flex items-center justify-between">
+        <div className="border-b border-border p-4 flex items-center justify-center relative">
           <h1 className="text-title text-text-primary">
-            RAG 知识库
+            智能知识问答
           </h1>
           <button
             onClick={onToggleSidebar}
-            className="lg:hidden p-1 rounded-element text-text-secondary hover:text-text-primary hover:bg-gray-100 transition-colors"
+            className="lg:hidden absolute right-4 p-1 rounded-element text-text-secondary hover:text-text-primary hover:bg-gray-100 transition-colors"
           >
             <X size={20} />
           </button>

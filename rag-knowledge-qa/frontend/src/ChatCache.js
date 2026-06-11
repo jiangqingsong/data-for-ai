@@ -12,15 +12,15 @@ class ChatCache {
     /**
      * 生成缓存键
      */
-    generateCacheKey(question, top_k, search_type) {
-        return `${question}:${top_k}:${search_type}`;
+    generateCacheKey(question, top_k, search_type, subdir = null) {
+        return `${question}:${top_k}:${search_type}:${subdir || '__default__'}`;
     }
 
     /**
      * 获取缓存
      */
-    get(question, top_k, search_type) {
-        const key = this.generateCacheKey(question, top_k, search_type);
+    get(question, top_k, search_type, subdir = null) {
+        const key = this.generateCacheKey(question, top_k, search_type, subdir);
         const item = this.cache.get(key);
 
         if (!item) return null;
@@ -37,8 +37,8 @@ class ChatCache {
     /**
      * 设置缓存
      */
-    set(question, top_k, search_type, data) {
-        const key = this.generateCacheKey(question, top_k, search_type);
+    set(question, top_k, search_type, data, subdir = null) {
+        const key = this.generateCacheKey(question, top_k, search_type, subdir);
 
         // 限制缓存大小
         if (this.cache.size >= this.maxSize) {

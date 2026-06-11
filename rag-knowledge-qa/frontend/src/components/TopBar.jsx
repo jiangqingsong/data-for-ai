@@ -1,15 +1,17 @@
 /**
  * TopBar - 中栏顶部操作栏
- * 会话标题可点击编辑 | 导出/刷新/高级设置
+ * 会话标题可点击编辑 | 知识库选择器 | 导出/刷新/高级设置
  */
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, RefreshCw, Download, Settings } from 'lucide-react';
+import { ChevronDown, ChevronUp, RefreshCw, Download, Settings, Database } from 'lucide-react';
 import { useToast } from './Toast';
 
 const TopBar = ({
   activeTab, showAdvancedSettings, onToggleAdvanced,
   topK, onTopKChange, retrievalStrategy, onStrategyChange,
   currentSession, onRenameSession, onExportSession, onRefreshContext,
+  /* 问答知识库选择 */
+  selectedChatKB, onChatKBChange, knowledgeBases = [],
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -46,7 +48,7 @@ const TopBar = ({
   return (
     <div className="border-b border-border bg-surface-white">
       <div className="flex items-center justify-between px-6 py-3">
-        {/* 左侧：会话标题 */}
+        {/* 左侧：会话标题 + 知识库选择器 */}
         <div className="flex items-center gap-3 min-w-0">
           {isEditingTitle ? (
             <input type="text" value={editTitle}
@@ -64,6 +66,23 @@ const TopBar = ({
               title={activeTab === 'chat' ? '点击编辑会话名称' : ''}>
               {displayTitle}
             </h2>
+          )}
+
+          {/* 知识库选择器 — 仅在聊天页面显示 */}
+          {activeTab === 'chat' && (
+            <div className="flex items-center gap-1.5 ml-2 pl-3 border-l border-border">
+              <Database size={14} className="text-text-secondary" />
+              <select
+                value={selectedChatKB || ''}
+                onChange={(e) => onChatKBChange(e.target.value)}
+                className="text-caption text-text-primary bg-gray-50 border border-border rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer max-w-[140px]"
+              >
+                <option value="">默认知识库</option>
+                {knowledgeBases.map(kb => (
+                  <option key={kb.name} value={kb.name}>{kb.name}</option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
 

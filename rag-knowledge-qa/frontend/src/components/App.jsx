@@ -64,6 +64,13 @@ const App = () => {
   // null | "retrieving" | "generating"
   const phaseTimerRef = useRef(null);
 
+  /* 迭代5: 知识库管理 */
+  const [knowledgeBases, setKnowledgeBases] = useState([]);
+  const [selectedKBName, setSelectedKBName] = useState(null);
+  const [selectedKBStats, setSelectedKBStats] = useState(null);
+  const [isKBLoading, setIsKBLoading] = useState(false);
+  const [selectedChatKB, setSelectedChatKB] = useState(null); // 问答界面选择的知识库
+
   const messagesEndRef = useRef(null);
 
   // ========== 派生值 ==========
@@ -115,7 +122,7 @@ const App = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      await Promise.all([fetchSystemStatus(), fetchKnowledgeStats()]);
+      await Promise.all([fetchSystemStatus(), fetchKnowledgeStats(), fetchKnowledgeBases()]);
       setIsLoadingSystemData(false);
     };
     fetchData();
@@ -261,7 +268,7 @@ const App = () => {
     };
 
     try {
-      await apiClient.chatStream(questionText, topK, retrievalStrategy, onChunk, onComplete, onError);
+      await apiClient.chatStream(questionText, topK, retrievalStrategy, onChunk, onComplete, onError, selectedChatKB);
     } catch (error) {
       if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
       setRetrievalPhase(null);
@@ -275,7 +282,7 @@ const App = () => {
       );
       setIsLoading(false);
     }
-  }, [topK, retrievalStrategy, updateCurrentSessionMessages]);
+  }, [topK, retrievalStrategy, selectedChatKB, updateCurrentSessionMessages]);
 
   /** 发送消息 */
   const handleSendMessage = async (e) => {
@@ -428,6 +435,59 @@ const App = () => {
     executeChatStream(questionText);
   }, [currentSessionId, updateCurrentSessionMessages, executeChatStream]);
 
+  // ========== 知识库管理 ==========
+
+  const fetchKnowledgeBases = useCallback(async () => {
+    setIsKBLoading(true);
+    const data = await apiClient.getKnowledgeBases();
+    if (data?.knowledge_bases) setKnowledgeBases(data.knowledge_bases);
+    setIsKBLoading(false);
+  }, []);
+
+  const handleCreateKB = useCallback(async (name) => {
+    const result = await apiClient.createKnowledgeBase(name);
+    if (result) await fetchKnowledgeBases();
+    return result;
+  }, [fetchKnowledgeBases]);
+
+  const handleDeleteKB = useCallback(async (name) => {
+    const result = await apiClient.deleteKnowledgeBase(name);
+    if (result) {
+      if (selectedKBName === name) {
+        setSelectedKBName(null);
+        setSelectedKBStats(null);
+      }
+      await fetchKnowledgeBases();
+    }
+    return result;
+  }, [fetchKnowledgeBases, selectedKBName]);
+
+  const handleSelectKB = useCallback(async (name) => {
+    setSelectedKBName(name);
+    const stats = await apiClient.getKnowledgeBaseStats(name);
+    setSelectedKBStats(stats);
+  }, []);
+
+  const handleUploadDocument = useCallback(async (name, file) => {
+    const result = await apiClient.uploadDocumentToKB(name, file);
+    if (result) {
+      const stats = await apiClient.getKnowledgeBaseStats(name);
+      setSelectedKBStats(stats);
+      await fetchKnowledgeBases();
+    }
+    return result;
+  }, [fetchKnowledgeBases]);
+
+  const handleTriggerPipeline = useCallback(async (name) => {
+    const result = await apiClient.triggerPipeline(name);
+    if (result) {
+      const stats = await apiClient.getKnowledgeBaseStats(name);
+      setSelectedKBStats(stats);
+      await fetchKnowledgeBases();
+    }
+    return result;
+  }, [fetchKnowledgeBases]);
+
   // ========== UI 事件处理 ==========
 
   const handleTabChange = (tab) => {
@@ -440,6 +500,7 @@ const App = () => {
   const handleTopKChange = (value) => setTopK(value);
   const handleStrategyChange = (value) => setRetrievalStrategy(value);
   const handleInputChange = (value) => setInputMessage(value);
+  const handleChatKBChange = (value) => setSelectedChatKB(value || null);
 
   // ========== 渲染 ==========
 
@@ -488,6 +549,19 @@ const App = () => {
       onSendEmpty={handleSendQuickQuestion}
       suggestedQuestions={suggestedQuestions}
       suggestedQuestionsLoading={suggestedQuestionsLoading}
+      /* 迭代5: 知识库管理 */
+      knowledgeBases={knowledgeBases}
+      selectedKBName={selectedKBName}
+      selectedKBStats={selectedKBStats}
+      isKBLoading={isKBLoading}
+      onCreateKB={handleCreateKB}
+      onDeleteKB={handleDeleteKB}
+      onSelectKB={handleSelectKB}
+      onUploadDocument={handleUploadDocument}
+      onTriggerPipeline={handleTriggerPipeline}
+      /* 问答知识库选择 */
+      selectedChatKB={selectedChatKB}
+      onChatKBChange={handleChatKBChange}
     />
     </ToastProvider>
   );
