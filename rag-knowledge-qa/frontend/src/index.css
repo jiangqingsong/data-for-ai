@@ -40,6 +40,9 @@
 
 /* 自定义选择样式 */
 select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%2386909C' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
   background-position: right 0.5rem center;
   background-repeat: no-repeat;
@@ -109,6 +112,96 @@ select {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+/* KB 列表项滑出动画（删除成功） */
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+    max-height: 80px;
+  }
+  to {
+    transform: translateX(-40px);
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+.kb-item-exit {
+  animation: slideOutLeft 0.35s ease-out forwards;
+  overflow: hidden;
+}
+
+/* KB 列表项插入动画（创建乐观条目） */
+@keyframes slideUpFade {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+    max-height: 80px;
+  }
+}
+
+.kb-item-enter {
+  animation: slideUpFade 0.3s ease-out;
+}
+
+/* 创建中呼吸脉冲 */
+@keyframes breathingPulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+.kb-item-creating {
+  animation: breathingPulse 1.8s ease-in-out infinite;
+}
+
+/* 删除中灰色遮罩 */
+.kb-item-deleting {
+  position: relative;
+  pointer-events: none;
+}
+
+.kb-item-deleting::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: inherit;
+  z-index: 1;
+}
+
+/* 小型旋转指示器 */
+.kb-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #E5E7EB;
+  border-top-color: #86909C;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 创建失败/错误态 */
+.kb-item-error {
+  border-color: #FCA5A5 !important;
+  background: #FEF2F2 !important;
 }
 
 /* line-clamp 展开/折叠过渡 */

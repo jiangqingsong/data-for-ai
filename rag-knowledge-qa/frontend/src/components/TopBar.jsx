@@ -3,7 +3,7 @@
  * 会话标题可点击编辑 | 知识库选择器 | 导出/刷新/高级设置
  */
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, RefreshCw, Download, Settings, Database } from 'lucide-react';
+import { ChevronDown, ChevronUp, RefreshCw, Download, Settings, Database, Loader, X } from 'lucide-react';
 import { useToast } from './Toast';
 
 const TopBar = ({
@@ -12,6 +12,8 @@ const TopBar = ({
   currentSession, onRenameSession, onExportSession, onRefreshContext,
   /* 问答知识库选择 */
   selectedChatKB, onChatKBChange, knowledgeBases = [],
+  /* Pipeline 全局状态 */
+  pipelineRunningKB, pipelineStatus,
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -47,6 +49,26 @@ const TopBar = ({
 
   return (
     <div className="border-b border-border bg-surface-white">
+      {/* Pipeline 全局进度条 — 跨所有 tab 可见 */}
+      {pipelineStatus && (
+        <div className={`px-6 py-2 text-caption font-medium flex items-center gap-2 ${
+          pipelineStatus.step === 'error' ? 'bg-red-50 text-red-700' :
+          pipelineStatus.step === 'done' ? 'bg-green-50 text-green-700' :
+          'bg-brand-50 text-brand-700'
+        }`}>
+          {pipelineStatus.step !== 'error' && pipelineStatus.step !== 'done' && (
+            <Loader size={14} className="animate-spin" />
+          )}
+          <span className="flex-1">
+            {pipelineStatus.step === 'error' ? '❌' : pipelineStatus.step === 'done' ? '✅' : ''}
+            {' '}知识库「{pipelineRunningKB}」: {pipelineStatus.message}
+          </span>
+          {pipelineStatus.step !== 'error' && pipelineStatus.step !== 'done' && (
+            <span className="text-xs">{pipelineStatus.progress_pct}%</span>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between px-6 py-3">
         {/* 左侧：会话标题 + 知识库选择器 */}
         <div className="flex items-center gap-3 min-w-0">
@@ -71,11 +93,15 @@ const TopBar = ({
           {/* 知识库选择器 — 仅在聊天页面显示 */}
           {activeTab === 'chat' && (
             <div className="flex items-center gap-1.5 ml-2 pl-3 border-l border-border">
-              <Database size={14} className="text-text-secondary" />
+              <Database size={14} className="text-text-secondary flex-shrink-0" />
               <select
                 value={selectedChatKB || ''}
                 onChange={(e) => onChatKBChange(e.target.value)}
-                className="text-caption text-text-primary bg-gray-50 border border-border rounded-md px-2 py-1 outline-none focus:ring-1 focus:ring-brand-500 cursor-pointer max-w-[140px]"
+                className="text-caption text-text-primary bg-gray-50 border border-border rounded-element px-2.5 py-1.5 outline-none
+                  hover:border-gray-300 hover:bg-gray-100
+                  focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 focus:bg-white
+                  cursor-pointer min-w-[120px] max-w-[180px]
+                  transition-colors duration-200"
               >
                 <option value="">默认知识库</option>
                 {knowledgeBases.map(kb => (

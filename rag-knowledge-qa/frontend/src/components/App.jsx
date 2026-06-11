@@ -23,7 +23,7 @@ const createDefaultSession = () => ({
     {
       id: generateId(),
       role: 'assistant',
-      content: '你好！我是你的物理知识库助手。有什么物理问题需要我帮助解答吗？',
+      content: '你好！我是你的知识问答助手，正在加载知识库信息...',
       timestamp: new Date().toLocaleTimeString(),
       favorite: false,
     }
@@ -31,6 +31,23 @@ const createDefaultSession = () => ({
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 });
+
+/**
+ * 根据当前知识库选择状态生成欢迎词
+ * 场景1: 选中具体KB → 绑定【XXX】知识库
+ * 场景2: 未选中但有可用KB → 已绑定多个知识库
+ * 场景3: 无任何KB → 请先选择绑定知识库
+ */
+const getWelcomeText = (selectedChatKB, knowledgeBases) => {
+  const kbCount = knowledgeBases?.length || 0;
+  if (selectedChatKB) {
+    return `你好！我是你的知识问答助手，当前会话已绑定【${selectedChatKB}】知识库，我会基于该库内容为你解答问题~`;
+  } else if (kbCount > 0) {
+    return '你好！我是你的知识问答助手，当前会话已绑定多个知识库，我会根据你的提问自动检索匹配的内容~';
+  } else {
+    return '你好！我是你的知识问答助手，请先选择绑定知识库，我才能为你解答相关问题哦~';
+  }
+};
 
 /** 预生成默认会话，确保 sessions 和 currentSessionId 引用同一 ID */
 const defaultSession = createDefaultSession();
@@ -70,6 +87,11 @@ const App = () => {
   const [selectedKBStats, setSelectedKBStats] = useState(null);
   const [isKBLoading, setIsKBLoading] = useState(false);
   const [selectedChatKB, setSelectedChatKB] = useState(null); // 问答界面选择的知识库
+
+  /* Pipeline 全局状态（跨 tab 保持） */
+  const [pipelineRunningKB, setPipelineRunningKB] = useState(null); // 正在运行的 KB 名
+  const [pipelineStatus, setPipelineStatus] = useState(null);       // { step, message, progress_pct, error_detail }
+  const pipelinePollRef = useRef(null);
 
   const messagesEndRef = useRef(null);
 
@@ -138,6 +160,33 @@ const App = () => {
       setSuggestedQuestionsLoading(false);
     };
     fetchQuestions();
+  }, []);
+
+  /**
+   * 欢迎词动态适配逻辑
+   * 响应 selectedChatKB 和 knowledgeBases 变化，覆盖3种场景。
+   * 仅更新"新会话"（仅有1条assistant消息的会话），已有对话记录的不改动。
+   */
+  useEffect(() => {
+    if (isLoadingSystemData) return;
+    const welcomeText = getWelcomeText(selectedChatKB, knowledgeBases);
+    setSessions(prev =>
+      prev.map(s => {
+        // 只更新仅有1条欢迎消息的新会话
+        if (s.messages.length === 1 && s.messages[0].role === 'assistant') {
+          return {
+            ...s,
+            messages: [{ ...s.messages[0], content: welcomeText }],
+          };
+        }
+        return s;
+      })
+    );
+  }, [selectedChatKB, knowledgeBases, isLoadingSystemData]);
+
+  /** 关闭 Pipeline 进度条（手动关闭完成/失败提示） */
+  const handleDismissPipelineStatus = useCallback(() => {
+    setPipelineStatus(null);
   }, []);
 
   // ========== 溯源面板控制 ==========
@@ -323,6 +372,10 @@ const App = () => {
   const handleCreateSession = () => {
     sessionInputCache.current[currentSessionId] = inputMessage;
     const newSession = createDefaultSession();
+    // 如果知识库数据已加载，新建会话时直接写入正确的欢迎词
+    if (!isLoadingSystemData) {
+      newSession.messages[0].content = getWelcomeText(selectedChatKB, knowledgeBases);
+    }
     setSessions(prev => [...prev, newSession]);
     setCurrentSessionId(newSession.id);
     setInputMessage('');
@@ -376,7 +429,7 @@ const App = () => {
       {
         id: generateId(),
         role: 'assistant',
-        content: '上下文已清空。有什么新的物理问题需要我帮助解答吗？',
+        content: '上下文已清空，有什么新的问题需要我帮助解答吗？',
         timestamp: new Date().toLocaleTimeString(),
         favorite: false,
       }
@@ -445,25 +498,40 @@ const App = () => {
   }, []);
 
   const handleCreateKB = useCallback(async (name) => {
-    const result = await apiClient.createKnowledgeBase(name);
-    if (result) await fetchKnowledgeBases();
-    return result;
+    try {
+      const result = await apiClient.createKnowledgeBase(name);
+      if (result) await fetchKnowledgeBases();
+      return result;
+    } catch (e) {
+      console.error('创建知识库失败:', e);
+      return null;
+    }
   }, [fetchKnowledgeBases]);
 
   const handleDeleteKB = useCallback(async (name) => {
-    const result = await apiClient.deleteKnowledgeBase(name);
-    if (result) {
-      if (selectedKBName === name) {
-        setSelectedKBName(null);
-        setSelectedKBStats(null);
+    try {
+      const result = await apiClient.deleteKnowledgeBase(name);
+      if (result) {
+        // 立即从本地状态移除，不依赖网络刷新
+        setKnowledgeBases(prev => prev.filter(kb => kb.name !== name));
+        if (selectedKBName === name) {
+          setSelectedKBName(null);
+          setSelectedKBStats(null);
+        }
       }
-      await fetchKnowledgeBases();
+      return result;
+    } catch (e) {
+      console.error('删除知识库失败:', e);
+      return null;
     }
-    return result;
   }, [fetchKnowledgeBases, selectedKBName]);
 
   const handleSelectKB = useCallback(async (name) => {
     setSelectedKBName(name);
+    if (!name) {
+      setSelectedKBStats(null);
+      return;
+    }
     const stats = await apiClient.getKnowledgeBaseStats(name);
     setSelectedKBStats(stats);
   }, []);
@@ -481,12 +549,66 @@ const App = () => {
   const handleTriggerPipeline = useCallback(async (name) => {
     const result = await apiClient.triggerPipeline(name);
     if (result) {
-      const stats = await apiClient.getKnowledgeBaseStats(name);
-      setSelectedKBStats(stats);
-      await fetchKnowledgeBases();
+      // 启动全局轮询
+      setPipelineRunningKB(name);
+      setPipelineStatus({
+        step: 'starting',
+        message: '正在启动 Pipeline...',
+        progress_pct: 0,
+        error_detail: null,
+        is_running: true,
+      });
+      // 稍后刷新统计
+      setTimeout(async () => {
+        const stats = await apiClient.getKnowledgeBaseStats(name);
+        setSelectedKBStats(stats);
+        await fetchKnowledgeBases();
+      }, 1000);
     }
     return result;
   }, [fetchKnowledgeBases]);
+
+  const handleDeleteDocument = useCallback(async (kbName, filename) => {
+    try {
+      const result = await apiClient.deleteDocumentFromKB(kbName, filename);
+      if (result) {
+        // 刷新统计和知识库列表
+        const stats = await apiClient.getKnowledgeBaseStats(kbName);
+        setSelectedKBStats(stats);
+        await fetchKnowledgeBases();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error('删除文档失败:', e);
+      return false;
+    }
+  }, [fetchKnowledgeBases]);
+
+  // Pipeline 全局轮询（跨 tab 保持进度，放在 fetchKnowledgeBases 后面避免 TDZ）
+  useEffect(() => {
+    if (!pipelineRunningKB) return;
+    const poll = async () => {
+      const status = await apiClient.getPipelineStatus(pipelineRunningKB);
+      if (status) {
+        setPipelineStatus(prev => ({ ...prev, ...status }));
+        if (!status.is_running) {
+          setPipelineRunningKB(null);
+          const stats = await apiClient.getKnowledgeBaseStats(pipelineRunningKB);
+          setSelectedKBStats(stats);
+          await fetchKnowledgeBases();
+        }
+      }
+    };
+    poll();
+    pipelinePollRef.current = setInterval(poll, 2000);
+    return () => {
+      if (pipelinePollRef.current) {
+        clearInterval(pipelinePollRef.current);
+        pipelinePollRef.current = null;
+      }
+    };
+  }, [pipelineRunningKB, fetchKnowledgeBases]);
 
   // ========== UI 事件处理 ==========
 
@@ -559,6 +681,11 @@ const App = () => {
       onSelectKB={handleSelectKB}
       onUploadDocument={handleUploadDocument}
       onTriggerPipeline={handleTriggerPipeline}
+      onDeleteDocument={handleDeleteDocument}
+      /* Pipeline 全局状态 */
+      pipelineRunningKB={pipelineRunningKB}
+      pipelineStatus={pipelineStatus}
+      onDismissPipelineStatus={handleDismissPipelineStatus}
       /* 问答知识库选择 */
       selectedChatKB={selectedChatKB}
       onChatKBChange={handleChatKBChange}
