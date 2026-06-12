@@ -59,7 +59,7 @@ const KBTabList = ({ chunks = [], documents = [] }) => {
           </div>
         ) : (
           <div className="text-center py-8 text-caption text-text-secondary">
-            暂无文档，请上传 PDF 文件
+            暂无文档，请上传文档
           </div>
         )
       )}

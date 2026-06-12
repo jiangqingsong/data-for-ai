@@ -539,8 +539,12 @@ const App = () => {
   const handleUploadDocument = useCallback(async (name, file) => {
     const result = await apiClient.uploadDocumentToKB(name, file);
     if (result) {
-      const stats = await apiClient.getKnowledgeBaseStats(name);
-      setSelectedKBStats(stats);
+      try {
+        const stats = await apiClient.getKnowledgeBaseStats(name);
+        setSelectedKBStats(stats);
+      } catch (e) {
+        console.error('获取知识库统计失败:', e);
+      }
       await fetchKnowledgeBases();
     }
     return result;
@@ -560,8 +564,12 @@ const App = () => {
       });
       // 稍后刷新统计
       setTimeout(async () => {
-        const stats = await apiClient.getKnowledgeBaseStats(name);
-        setSelectedKBStats(stats);
+        try {
+          const stats = await apiClient.getKnowledgeBaseStats(name);
+          setSelectedKBStats(stats);
+        } catch (e) {
+          console.error('获取知识库统计失败:', e);
+        }
         await fetchKnowledgeBases();
       }, 1000);
     }
@@ -573,8 +581,12 @@ const App = () => {
       const result = await apiClient.deleteDocumentFromKB(kbName, filename);
       if (result) {
         // 刷新统计和知识库列表
-        const stats = await apiClient.getKnowledgeBaseStats(kbName);
-        setSelectedKBStats(stats);
+        try {
+          const stats = await apiClient.getKnowledgeBaseStats(kbName);
+          setSelectedKBStats(stats);
+        } catch (e) {
+          console.error('获取知识库统计失败:', e);
+        }
         await fetchKnowledgeBases();
         return true;
       }
@@ -594,8 +606,12 @@ const App = () => {
         setPipelineStatus(prev => ({ ...prev, ...status }));
         if (!status.is_running) {
           setPipelineRunningKB(null);
-          const stats = await apiClient.getKnowledgeBaseStats(pipelineRunningKB);
-          setSelectedKBStats(stats);
+          try {
+            const stats = await apiClient.getKnowledgeBaseStats(pipelineRunningKB);
+            setSelectedKBStats(stats);
+          } catch (e) {
+            console.error('获取知识库统计失败:', e);
+          }
           await fetchKnowledgeBases();
         }
       }

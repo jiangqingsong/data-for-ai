@@ -13,7 +13,7 @@ import apiClient from '../ApiClient.jsx';
 
 const STEP_LABELS = {
   starting: '启动中',
-  loading: '加载 PDF',
+  loading: '加载文档',
   cleaning: '文本清洗',
   splitting: '文档分块',
   embedding: '向量化',

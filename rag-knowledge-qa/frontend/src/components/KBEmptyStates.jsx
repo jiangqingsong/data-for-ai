@@ -23,7 +23,7 @@ const states = {
   noDocs: {
     icon: FileText,
     title: '知识库中没有文档',
-    description: '上传 PDF 文档后运行 Pipeline 即可生成知识块',
+    description: '上传文档后运行 Pipeline 即可生成知识块',
   },
 };
 

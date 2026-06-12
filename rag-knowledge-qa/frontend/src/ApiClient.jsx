@@ -1,6 +1,6 @@
 import chatCache from './ChatCache';
 
-const DEFAULT_TIMEOUT = 30000; // 30秒超时
+const DEFAULT_TIMEOUT = 120000; // 120秒超时（LLM 生成较慢）
 const DEFAULT_RETRIES = 1; // 重试次数
 const API_BASE_URL = '/api';
 
@@ -316,7 +316,7 @@ class ApiClient {
     /**
      * 上传文档到知识库
      * @param {string} name - 知识库名称
-     * @param {File} file - PDF 文件
+     * @param {File} file - 文档文件（PDF/Word）
      */
     async uploadDocumentToKB(name, file) {
         try {

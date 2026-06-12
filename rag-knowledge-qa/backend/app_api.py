@@ -571,9 +571,13 @@ def _get_kb_stats(name: str) -> dict:
     documents = []
     doc_count = 0
     if os.path.isdir(pdf_dir):
-        pdf_files = sorted(glob.glob(os.path.join(pdf_dir, "*.pdf")))
-        doc_count = len(pdf_files)
-        for fp in pdf_files:
+        doc_files = sorted([
+            f for f in os.listdir(pdf_dir)
+            if f.lower().endswith(('.pdf', '.docx'))
+        ])
+        doc_count = len(doc_files)
+        for fp_path in doc_files:
+            fp = os.path.join(pdf_dir, fp_path)
             fname = os.path.basename(fp)
             fsize = os.path.getsize(fp)
             pages = 0
@@ -733,14 +737,14 @@ async def get_knowledge_base_stats(name: str):
 
 @app.post("/api/knowledge-bases/{name}/upload")
 async def upload_document_to_kb(name: str, file: UploadFile = File(...)):
-    """上传PDF到指定知识库"""
+    """上传文档到指定知识库"""
     try:
         err = _validate_kb_name(name)
         if err:
             raise HTTPException(status_code=400, detail=err)
 
-        if not file.filename or not file.filename.lower().endswith('.pdf'):
-            raise HTTPException(status_code=400, detail="仅支持上传 PDF 文件")
+        if not file.filename or not file.filename.lower().endswith(('.pdf', '.doc', '.docx')):
+            raise HTTPException(status_code=400, detail="仅支持上传 PDF 和 Word (.docx) 文件")
 
         # 安全文件名
         safe_name = os.path.basename(file.filename)
@@ -794,21 +798,24 @@ async def trigger_pipeline(name: str):
         if not os.path.isabs(pdf_dir):
             pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
 
-        pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))
-        if not pdf_files:
-            raise HTTPException(status_code=400, detail=f"知识库 '{name}' 中没有 PDF 文件")
+        doc_files = sorted([
+            f for f in os.listdir(pdf_dir)
+            if f.lower().endswith(('.pdf', '.docx')) and not f.startswith('~')
+        ])
+        if not doc_files:
+            raise HTTPException(status_code=400, detail=f"知识库 '{name}' 中没有可处理的文档")
 
         _running_pipelines[name] = True
         _pipeline_progress[name] = {"step": "starting", "message": "正在启动 Pipeline...", "progress_pct": 0}
 
         def _run():
             try:
-                from src.pipeline import load_pdfs, clean_documents, split_documents, build_vectorstore
+                from src.pipeline import load_documents, clean_documents, split_documents, build_vectorstore
 
-                _pipeline_progress[name] = {"step": "loading", "message": "正在加载 PDF...", "progress_pct": 5}
-                docs = load_pdfs(pdf_dir)
+                _pipeline_progress[name] = {"step": "loading", "message": "正在加载文档...", "progress_pct": 5}
+                docs = load_documents(pdf_dir)
                 if not docs:
-                    _pipeline_progress[name] = {"step": "error", "message": "未找到可处理的 PDF 文件", "progress_pct": 0}
+                    _pipeline_progress[name] = {"step": "error", "message": "未找到可处理的文档", "progress_pct": 0}
                     return
 
                 _pipeline_progress[name] = {"step": "cleaning", "message": "正在清洗文本...", "progress_pct": 25}

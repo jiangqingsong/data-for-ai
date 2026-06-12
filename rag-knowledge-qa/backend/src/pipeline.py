@@ -1,6 +1,6 @@
-"""数据 Pipeline — PDF 加载、清洗、分块、向量化
+"""数据 Pipeline — 文档加载、清洗、分块、向量化
 
-支持文字版 PDF（直接提取文本）和扫描版 PDF（OCR 识别），自动按页检测路由。
+支持 PDF（文字版/扫描版 OCR）和 Word (.docx) 文档。
 """
 import os
 import re
@@ -41,39 +41,73 @@ def _ocr_page(pixmap, ocr_reader) -> str:
     return "\n".join(lines)
 
 
-def load_pdfs(pdf_dir: str, file_filter: str | None = None) -> List[Document]:
-    """加载目录下的 PDF 文件，自动检测扫描页并 OCR
+def _load_docx(filepath: str) -> str:
+    """加载 Word (.docx) 文件，提取纯文本"""
+    from docx import Document as DocxDocument
+    doc = DocxDocument(filepath)
+    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+    return "\n\n".join(paragraphs)
 
-    逐页处理：
-      - 先用 pymupdf 提取文本，有效内容 >= 50 字符 → 直接使用
-      - 有效内容 < 50 字符 → 渲染为图片 → EasyOCR 识别
+
+def _is_docx(filename: str) -> bool:
+    return filename.lower().endswith(".docx")
+
+
+def load_documents(doc_dir: str, file_filter: str | None = None) -> List[Document]:
+    """加载目录下的 PDF 和 Word 文档
+
+    PDF：逐页提取文本，自动检测扫描页并 OCR
+    Word：提取段落文本，作为一个 Document
 
     Args:
-        pdf_dir: PDF 文件目录
-        file_filter: 文件名过滤关键字（如 "数学" 只加载含"数学"的PDF），None=全部
+        doc_dir: 文档目录
+        file_filter: 文件名过滤关键字，None=全部
 
     每个 Document 包含:
-      - page_content: 页面文本内容
+      - page_content: 文本内容
       - metadata: {"source": 文件名, "page": 页码, "is_scanned": bool}
     """
     all_docs = []
-    pdf_files = [
-        f for f in os.listdir(pdf_dir) if f.lower().endswith(".pdf")
-    ]
+    supported_exts = (".pdf", ".docx")
+    doc_files = sorted([
+        f for f in os.listdir(doc_dir)
+        if f.lower().endswith(supported_exts) and not f.startswith("~")
+    ])
 
     if file_filter:
-        pdf_files = [f for f in pdf_files if file_filter in f]
+        doc_files = [f for f in doc_files if file_filter in f]
 
-    if not pdf_files:
-        print(f"警告: {pdf_dir} 目录下没有找到 PDF 文件")
+    if not doc_files:
+        print(f"警告: {doc_dir} 目录下没有找到可处理的文档")
         return all_docs
 
     ocr_reader = None
     scanned_count = 0
+    docx_count = 0
 
-    for pdf_file in pdf_files:
-        filepath = os.path.join(pdf_dir, pdf_file)
-        print(f"  加载: {pdf_file} ...")
+    for doc_file in doc_files:
+        filepath = os.path.join(doc_dir, doc_file)
+        print(f"  加载: {doc_file} ...")
+
+        if _is_docx(doc_file):
+            # Word 文档处理
+            try:
+                text = _load_docx(filepath)
+                all_docs.append(Document(
+                    page_content=text,
+                    metadata={
+                        "source": doc_file,
+                        "page": 0,
+                        "is_scanned": False,
+                    },
+                ))
+                docx_count += 1
+                print(f"    OK: Word 文档, {len(text)} 字符")
+            except Exception as e:
+                print(f"    FAIL: {doc_file}, 错误: {e}")
+            continue
+
+        # PDF 文档处理
         try:
             doc = fitz.open(filepath)
             text_pages = 0
@@ -97,7 +131,7 @@ def load_pdfs(pdf_dir: str, file_filter: str | None = None) -> List[Document]:
                 all_docs.append(Document(
                     page_content=text,
                     metadata={
-                        "source": pdf_file,
+                        "source": doc_file,
                         "page": page_num,
                         "is_scanned": _is_scanned_page(page.get_text()),
                     },
@@ -107,11 +141,15 @@ def load_pdfs(pdf_dir: str, file_filter: str | None = None) -> List[Document]:
             print(f"    OK: 文字 {text_pages} 页 + OCR {ocr_pages} 页")
 
         except Exception as e:
-            print(f"    FAIL: {pdf_file}, 错误: {e}")
+            print(f"    FAIL: {doc_file}, 错误: {e}")
 
-    print(f"共加载 {len(pdf_files)} 个 PDF, {len(all_docs)} 页"
-          f" (其中 OCR {scanned_count} 页)")
+    print(f"共加载 {len(doc_files)} 个文档, {len(all_docs)} 页"
+          f" (PDF {len(doc_files) - docx_count} + Word {docx_count}, OCR {scanned_count} 页)")
     return all_docs
+
+
+# 保持向后兼容的别名
+load_pdfs = load_documents
 
 
 WATERMARK_PATTERNS = [
@@ -249,13 +287,13 @@ def run_pipeline(
 ) -> Chroma:
     """一键执行完整的数据 Pipeline
 
-    PDF → 加载 → 清洗 → 分块 → 向量化 → Chroma
+    PDF/Word → 加载 → 清洗 → 分块 → 向量化 → Chroma
 
     Args:
-        pdf_dir: PDF 文件目录（None=自动从 Config 读取）
+        pdf_dir: 文档目录（None=自动从 Config 读取）
         persist_dir: Chroma 持久化目录（None=自动从 Config 读取）
-        subdir: PDF_BASE_DIR 下的子目录名，PDF 和向量库按子目录分存
-        file_filter: 文件名过滤关键字，如 "数学" 只处理含"数学"的 PDF，None=全部
+        subdir: PDF_BASE_DIR 下的子目录名，文档和向量库按子目录分存
+        file_filter: 文件名过滤关键字，None=全部
     """
     from src.config import Config
 
@@ -268,15 +306,15 @@ def run_pipeline(
     print("数据 Pipeline 开始执行")
     if subdir:
         print(f"子目录: {subdir}")
-    print(f"PDF 目录: {pdf_dir}")
+    print(f"文档目录: {pdf_dir}")
     print(f"向量库:   {persist_dir}")
     print("=" * 50)
 
     # 1. 加载
-    print("\n[1/4] 加载 PDF...")
-    docs = load_pdfs(pdf_dir, file_filter=file_filter)
+    print("\n[1/4] 加载文档...")
+    docs = load_documents(pdf_dir, file_filter=file_filter)
     if not docs:
-        raise ValueError(f"未找到 PDF 文件: {pdf_dir}")
+        raise ValueError(f"未找到可处理的文档: {pdf_dir}")
 
     # 2. 清洗
     print("\n[2/4] 文本清洗...")
@@ -305,10 +343,10 @@ if __name__ == "__main__":
     import sys
     import argparse
 
-    parser = argparse.ArgumentParser(description="RAG 数据 Pipeline — PDF → 向量库")
+    parser = argparse.ArgumentParser(description="RAG 数据 Pipeline — PDF/Word → 向量库")
     parser.add_argument(
         "file_filter", nargs="?", default=None,
-        help="文件名过滤关键字（如 '数学'），只处理含关键字的 PDF"
+        help="文件名过滤关键字（如 '数学'），只处理含关键字的文档"
     )
     parser.add_argument(
         "--subdir", default=None,

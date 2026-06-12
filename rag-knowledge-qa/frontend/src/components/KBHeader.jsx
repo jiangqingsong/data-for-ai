@@ -27,7 +27,7 @@ const KBHeader = ({ kbName, stats, onUpload, onTriggerPipeline, isPipelineRunnin
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf"
+            accept=".pdf,.doc,.docx"
             onChange={handleFileChange}
             className="hidden"
           />
@@ -36,7 +36,7 @@ const KBHeader = ({ kbName, stats, onUpload, onTriggerPipeline, isPipelineRunnin
             className="flex items-center gap-1.5 px-3 py-1.5 text-caption text-brand-500 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors"
           >
             <Upload size={14} />
-            上传 PDF
+            上传文档
           </button>
           <button
             onClick={() => onTriggerPipeline(kbName)}
