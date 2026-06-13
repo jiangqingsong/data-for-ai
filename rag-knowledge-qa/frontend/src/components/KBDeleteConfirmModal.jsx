@@ -1,11 +1,19 @@
 /**
  * KBDeleteConfirmModal - 删除知识库确认弹窗
+ *
+ * 交互逻辑：点击"确认删除"后弹窗立刻关闭，由父组件负责乐观更新和后台请求。
+ * 弹窗只做确认提醒，不做等待。
  */
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 
-const KBDeleteConfirmModal = ({ isOpen, onClose, onConfirm, kbName, isLoading }) => {
+const KBDeleteConfirmModal = ({ isOpen, onClose, onConfirm, kbName }) => {
   if (!isOpen) return null;
+
+  const handleConfirm = () => {
+    onConfirm(kbName);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -33,9 +41,8 @@ const KBDeleteConfirmModal = ({ isOpen, onClose, onConfirm, kbName, isLoading })
             取消
           </button>
           <button
-            onClick={() => onConfirm(kbName)}
-            disabled={isLoading}
-            className="px-4 py-2 text-body text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
+            onClick={handleConfirm}
+            className="px-4 py-2 text-body text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors"
           >
             确认删除
           </button>

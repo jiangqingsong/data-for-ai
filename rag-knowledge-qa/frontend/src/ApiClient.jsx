@@ -370,6 +370,33 @@ class ApiClient {
     }
 
     /**
+     * 删除知识库中的文档
+     * @param {string} name - 知识库名称
+     * @param {string} filename - 文档文件名
+     */
+    async deleteDocumentFromKB(name, filename) {
+        try {
+            return await this.request('DELETE', `/knowledge-bases/${encodeURIComponent(name)}/documents/${encodeURIComponent(filename)}`);
+        } catch (error) {
+            console.error('删除文档失败:', error);
+            return null;
+        }
+    }
+
+    /**
+     * 查询 Pipeline 实时日志
+     * @param {string} name - 知识库名称
+     */
+    async getPipelineLogs(name) {
+        try {
+            return await this.request('GET', `/knowledge-bases/${encodeURIComponent(name)}/pipeline/logs`);
+        } catch (error) {
+            console.error('查询 Pipeline 日志失败:', error);
+            return null;
+        }
+    }
+
+    /**
      * 健康检查
      */
     async healthCheck() {

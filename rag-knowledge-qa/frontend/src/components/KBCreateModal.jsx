@@ -1,10 +1,13 @@
 /**
  * KBCreateModal - 新建知识库弹窗
+ *
+ * 交互逻辑：点击"创建"后弹窗立刻关闭，由父组件负责乐观更新和后台请求。
+ * 弹窗只做输入校验，不做等待。
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 
-const KBCreateModal = ({ isOpen, onClose, onCreate, isLoading }) => {
+const KBCreateModal = ({ isOpen, onClose, onSubmit }) => {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const inputRef = useRef(null);
@@ -19,7 +22,7 @@ const KBCreateModal = ({ isOpen, onClose, onCreate, isLoading }) => {
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
@@ -34,12 +37,9 @@ const KBCreateModal = ({ isOpen, onClose, onCreate, isLoading }) => {
       setError('名称不能包含 / 或 \\');
       return;
     }
-    const result = await onCreate(trimmed);
-    if (result) {
-      onClose();
-    } else {
-      setError('创建失败，请稍后重试');
-    }
+    // 弹窗立刻关闭，由父组件处理后续逻辑
+    onSubmit(trimmed);
+    onClose();
   };
 
   return (
@@ -75,8 +75,7 @@ const KBCreateModal = ({ isOpen, onClose, onCreate, isLoading }) => {
             </button>
             <button
               type="submit"
-              disabled={isLoading}
-              className="px-4 py-2 text-body text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-body text-white bg-brand-500 rounded-lg hover:bg-brand-600 transition-colors"
             >
               创建
             </button>

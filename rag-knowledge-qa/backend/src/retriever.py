@@ -114,6 +114,26 @@ class Retriever:
             print(f"获取向量数量失败: {e}")
             return 0
 
+    def close(self):
+        """关闭 Chroma 客户端连接，释放 SQLite 文件锁
+
+        调用后此 Retriever 实例不可再使用。
+        """
+        try:
+            if hasattr(self.vectorstore, '_client'):
+                # Chroma 0.4.x: 关闭 HttpClient 或 PersistentClient
+                client = self.vectorstore._client
+                if hasattr(client, '_server'):
+                    # 嵌入式 PersistentClient
+                    if hasattr(client._server, '_system'):
+                        client._system.stop()
+                    if hasattr(client._server, '_manager'):
+                        client._manager.__del__()
+                if hasattr(client, 'close'):
+                    client.close()
+        except Exception as e:
+            print(f"关闭 Retriever 连接时出错: {e}")
+
 
 # ============================================================
 # Task 9: 检索策略对比实验

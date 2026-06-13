@@ -10,7 +10,7 @@ const TABS = [
   { key: 'documents', label: '文档' },
 ];
 
-const KBTabList = ({ chunks = [], documents = [] }) => {
+const KBTabList = ({ chunks = [], documents = [], kbName, onDeleteDocument }) => {
   const [activeTab, setActiveTab] = useState('chunks');
 
   return (
@@ -54,7 +54,7 @@ const KBTabList = ({ chunks = [], documents = [] }) => {
         documents.length > 0 ? (
           <div className="space-y-2">
             {documents.map((doc, i) => (
-              <KBDocumentCard key={doc.filename || i} document={doc} />
+              <KBDocumentCard key={doc.filename || i} document={doc} kbName={kbName} onDelete={onDeleteDocument} />
             ))}
           </div>
         ) : (

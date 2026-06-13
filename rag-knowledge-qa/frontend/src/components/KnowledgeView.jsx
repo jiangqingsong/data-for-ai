@@ -16,6 +16,10 @@ const KnowledgeView = ({
   onSelectKB,
   onUploadDocument,
   onTriggerPipeline,
+  onDeleteDocument,
+  pipelineRunningKB,
+  pipelineStatus,
+  onDismissPipelineStatus,
 }) => {
   return (
     <div className="flex h-full">
@@ -33,6 +37,10 @@ const KnowledgeView = ({
         knowledgeBases={knowledgeBases}
         onUploadDocument={onUploadDocument}
         onTriggerPipeline={onTriggerPipeline}
+        onDeleteDocument={onDeleteDocument}
+        pipelineRunningKB={pipelineRunningKB}
+        pipelineStatus={pipelineStatus}
+        onDismissPipelineStatus={onDismissPipelineStatus}
       />
     </div>
   );

@@ -334,10 +334,10 @@ const MessageBubble = ({ message, onRegenerate, onToggleFavorite, onOpenSourceDe
               ) : null}
 
               {/* 检索无结果兜底提示 */}
-              {isAssistant && !isStreaming && message.content && (!message.sources || message.sources.length === 0) && (
+              {isAssistant && !isStreaming && message.content && Array.isArray(message.sources) && message.sources.length === 0 && (
                 <div className="mt-3 pt-3 border-t border-border flex items-center gap-2 text-caption text-text-secondary">
                   <SearchX size={14} className="flex-shrink-0" />
-                  <span>未找到相关参考资料，请尝试换个问题重新提问</span>
+                  <span>😅 我在绑定的知识库中没有找到相关资料，你可以试试调整提问关键词，或者补充绑定相关文档哦~</span>
                 </div>
               )}
             </div>
@@ -426,7 +426,7 @@ const ChatView = ({ messages, messagesEndRef, onRegenerate, onToggleFavorite, on
 
   const QUICK_QUESTIONS = (suggestedQuestions && suggestedQuestions.length > 0)
     ? suggestedQuestions
-    : ['什么是欧姆定律？', '牛顿第一定律是什么？', '什么是电路串联和并联？'];
+    : ['知识库能做什么？', '怎么绑定文档？', '如何使用知识问答助手？'];
 
   return (
     <div className="h-full overflow-y-auto p-4 py-6">
@@ -435,7 +435,8 @@ const ChatView = ({ messages, messagesEndRef, onRegenerate, onToggleFavorite, on
           <div className="flex flex-col items-center justify-center h-full text-text-secondary py-12 animate-fadeIn">
             <MessageSquare size={48} className="mb-4 opacity-20" />
             <p className="text-module text-text-primary mb-2">开始对话</p>
-            <p className="text-body text-text-secondary mb-6">在下方输入你的问题，AI 将为你解答</p>
+            <p className="text-body text-text-secondary mb-2">在下方输入你的问题，AI 将为你解答</p>
+            <p className="text-caption text-text-secondary mb-6">💡 先点击顶部「默认知识库」下拉，选择要绑定的知识库吧</p>
             <div className="flex flex-wrap justify-center gap-3">
               {QUICK_QUESTIONS.map((q) => (
                 <button

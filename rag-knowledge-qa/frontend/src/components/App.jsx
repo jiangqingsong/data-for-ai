@@ -60,7 +60,6 @@ const App = () => {
   const sessionInputCache = useRef({}); // 会话级输入缓存
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [topK, setTopK] = useState(4);
   const [retrievalStrategy, setRetrievalStrategy] = useState('similarity');
   const [activeTab, setActiveTab] = useState('chat');
@@ -634,7 +633,6 @@ const App = () => {
   };
 
   const handleToggleSidebar = () => setSidebarOpen(prev => !prev);
-  const handleToggleAdvanced = () => setShowAdvancedSettings(prev => !prev);
   const handleTopKChange = (value) => setTopK(value);
   const handleStrategyChange = (value) => setRetrievalStrategy(value);
   const handleInputChange = (value) => setInputMessage(value);
@@ -651,13 +649,11 @@ const App = () => {
       onToggleSidebar={handleToggleSidebar}
       knowledgeStats={knowledgeStats}
       systemStatus={systemStatus}
-      showAdvancedSettings={showAdvancedSettings}
-      onToggleAdvanced={handleToggleAdvanced}
+      messages={messages}
       topK={topK}
       onTopKChange={handleTopKChange}
       retrievalStrategy={retrievalStrategy}
       onStrategyChange={handleStrategyChange}
-      messages={messages}
       isLoading={isLoading}
       messagesEndRef={messagesEndRef}
       inputMessage={inputMessage}

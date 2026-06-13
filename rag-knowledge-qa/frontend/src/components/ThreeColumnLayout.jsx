@@ -12,7 +12,6 @@ const ThreeColumnLayout = ({
   activeTab, onTabChange,
   sidebarOpen, onToggleSidebar,
   knowledgeStats, systemStatus,
-  showAdvancedSettings, onToggleAdvanced,
   topK, onTopKChange,
   retrievalStrategy, onStrategyChange,
   messages, isLoading, messagesEndRef,
@@ -33,7 +32,9 @@ const ThreeColumnLayout = ({
   /* 迭代5: 知识库管理 */
   knowledgeBases, selectedKBName, selectedKBStats,
   isKBLoading, onCreateKB, onDeleteKB,
-  onSelectKB, onUploadDocument, onTriggerPipeline,
+  onSelectKB, onUploadDocument, onTriggerPipeline, onDeleteDocument,
+  /* Pipeline 全局状态 */
+  pipelineRunningKB, pipelineStatus, onDismissPipelineStatus,
   /* 问答知识库选择 */
   selectedChatKB, onChatKBChange,
 }) => {
@@ -66,8 +67,6 @@ const ThreeColumnLayout = ({
       {/* 中栏：主内容区 flex-1 */}
       <MainContent
         activeTab={activeTab}
-        showAdvancedSettings={showAdvancedSettings}
-        onToggleAdvanced={onToggleAdvanced}
         topK={topK}
         onTopKChange={onTopKChange}
         retrievalStrategy={retrievalStrategy}
@@ -105,6 +104,11 @@ const ThreeColumnLayout = ({
         onSelectKB={onSelectKB}
         onUploadDocument={onUploadDocument}
         onTriggerPipeline={onTriggerPipeline}
+        onDeleteDocument={onDeleteDocument}
+        /* Pipeline 全局状态 */
+        pipelineRunningKB={pipelineRunningKB}
+        pipelineStatus={pipelineStatus}
+        onDismissPipelineStatus={onDismissPipelineStatus}
         /* 问答知识库选择 */
         selectedChatKB={selectedChatKB}
         onChatKBChange={onChatKBChange}

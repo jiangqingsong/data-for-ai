@@ -18,7 +18,9 @@ const ContentArea = ({
   /* 迭代5: 知识库管理 */
   knowledgeBases, selectedKBName, selectedKBStats,
   isKBLoading, onCreateKB, onDeleteKB,
-  onSelectKB, onUploadDocument, onTriggerPipeline,
+  onSelectKB, onUploadDocument, onTriggerPipeline, onDeleteDocument,
+  /* Pipeline 全局状态 */
+  pipelineRunningKB, pipelineStatus, onDismissPipelineStatus,
 }) => {
   const chatViewProps = {
     messages, messagesEndRef,
@@ -42,6 +44,10 @@ const ContentArea = ({
         onSelectKB={onSelectKB}
         onUploadDocument={onUploadDocument}
         onTriggerPipeline={onTriggerPipeline}
+        onDeleteDocument={onDeleteDocument}
+        pipelineRunningKB={pipelineRunningKB}
+        pipelineStatus={pipelineStatus}
+        onDismissPipelineStatus={onDismissPipelineStatus}
       />;
     case 'system':
       return <SystemView systemStatus={systemStatus} isLoadingSystemData={isLoadingSystemData} />;

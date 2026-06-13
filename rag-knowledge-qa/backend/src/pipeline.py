@@ -1,6 +1,6 @@
-"""数据 Pipeline — 文档加载、清洗、分块、向量化
+"""数据 Pipeline — PDF/Word 加载、清洗、分块、向量化
 
-支持 PDF（文字版/扫描版 OCR）和 Word (.docx) 文档。
+支持 PDF（文字版 + 扫描版 OCR）和 Word (.docx) 文档。
 """
 import os
 import re
@@ -41,115 +41,170 @@ def _ocr_page(pixmap, ocr_reader) -> str:
     return "\n".join(lines)
 
 
-def _load_docx(filepath: str) -> str:
-    """加载 Word (.docx) 文件，提取纯文本"""
+# ============================================================
+# Word (.docx) 加载
+# ============================================================
+
+def _load_word(filepath: str, filename: str) -> List[Document]:
+    """加载单个 Word (.docx) 文件，每段落为一个 Document
+
+    Args:
+        filepath: Word 文件完整路径
+        filename: 文件名（用于 metadata）
+
+    Returns:
+        Document 列表（每个段落一个，metadata: source, page=0）
+    """
     from docx import Document as DocxDocument
-    doc = DocxDocument(filepath)
-    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    return "\n\n".join(paragraphs)
+
+    try:
+        doc = DocxDocument(filepath)
+    except Exception as e:
+        print(f"    无法打开 Word 文件: {e}")
+        return []
+
+    docs = []
+    for i, para in enumerate(doc.paragraphs):
+        text = para.text.strip()
+        if not text:
+            continue
+        docs.append(Document(
+            page_content=text,
+            metadata={
+                "source": filename,
+                "page": 0,        # Word 无页码概念
+                "para_index": i,  # 段落序号
+                "file_type": "word",
+            },
+        ))
+    return docs
 
 
-def _is_docx(filename: str) -> bool:
-    return filename.lower().endswith(".docx")
+def _load_pdf_file(filepath: str, filename: str, ocr_reader=None) -> tuple[List[Document], int]:
+    """加载单个 PDF 文件，自动检测扫描页并 OCR
+
+    Args:
+        filepath: PDF 文件完整路径
+        filename: 文件名（用于 metadata）
+        ocr_reader: EasyOCR reader（None=自动懒加载）
+
+    Returns:
+        (documents, scanned_count)
+    """
+    global _ocr_reader
+
+    docs = []
+    scanned_count = 0
+
+    try:
+        pdf_doc = fitz.open(filepath)
+        text_pages = 0
+        ocr_pages = 0
+
+        for page_num in range(len(pdf_doc)):
+            page = pdf_doc[page_num]
+            text = page.get_text()
+
+            if _is_scanned_page(text):
+                if _ocr_reader is None and ocr_reader is None:
+                    print("    检测到扫描页，加载 OCR 模型...")
+                    _ocr_reader = _get_ocr_reader()
+                    ocr_reader = _ocr_reader
+                elif ocr_reader is None:
+                    ocr_reader = _ocr_reader
+                pix = page.get_pixmap(dpi=200)
+                text = _ocr_page(pix, ocr_reader)
+                ocr_pages += 1
+                scanned_count += 1
+            else:
+                text_pages += 1
+
+            docs.append(Document(
+                page_content=text,
+                metadata={
+                    "source": filename,
+                    "page": page_num,
+                    "is_scanned": _is_scanned_page(page.get_text()),
+                    "file_type": "pdf",
+                },
+            ))
+
+        pdf_doc.close()
+        print(f"    OK: 文字 {text_pages} 页 + OCR {ocr_pages} 页")
+
+    except Exception as e:
+        print(f"    FAIL: {filename}, 错误: {e}")
+
+    return docs, scanned_count
 
 
 def load_documents(doc_dir: str, file_filter: str | None = None) -> List[Document]:
-    """加载目录下的 PDF 和 Word 文档
+    """加载目录下的 PDF 和 Word 文件
 
-    PDF：逐页提取文本，自动检测扫描页并 OCR
-    Word：提取段落文本，作为一个 Document
+    支持格式：
+      - .pdf：文字版（pymupdf） + 扫描版（EasyOCR）
+      - .docx：python-docx 按段落提取
 
     Args:
         doc_dir: 文档目录
-        file_filter: 文件名过滤关键字，None=全部
+        file_filter: 文件名过滤关键字（子串匹配），None=全部
 
     每个 Document 包含:
       - page_content: 文本内容
-      - metadata: {"source": 文件名, "page": 页码, "is_scanned": bool}
+      - metadata: {"source": 文件名, "page": 页码, "file_type": "pdf"|"word", ...}
     """
-    all_docs = []
-    supported_exts = (".pdf", ".docx")
-    doc_files = sorted([
-        f for f in os.listdir(doc_dir)
-        if f.lower().endswith(supported_exts) and not f.startswith("~")
-    ])
+    if not os.path.isdir(doc_dir):
+        print(f"警告: 目录不存在: {doc_dir}")
+        return []
+
+    # 扫描所有支持的文件
+    all_files = os.listdir(doc_dir)
+    pdf_files = [f for f in all_files if f.lower().endswith(".pdf")]
+    word_files = [f for f in all_files if f.lower().endswith(".docx")]
 
     if file_filter:
-        doc_files = [f for f in doc_files if file_filter in f]
+        pdf_files = [f for f in pdf_files if file_filter in f]
+        word_files = [f for f in word_files if file_filter in f]
 
-    if not doc_files:
-        print(f"警告: {doc_dir} 目录下没有找到可处理的文档")
-        return all_docs
+    if not pdf_files and not word_files:
+        print(f"警告: {doc_dir} 目录下没有找到 PDF/Word 文件 (filter={file_filter})")
+        return []
 
+    print(f"找到 {len(pdf_files)} 个 PDF + {len(word_files)} 个 Word，开始加载...")
+
+    all_docs = []
     ocr_reader = None
     scanned_count = 0
     docx_count = 0
 
-    for doc_file in doc_files:
-        filepath = os.path.join(doc_dir, doc_file)
-        print(f"  加载: {doc_file} ...")
+    # 加载 PDF
+    for pdf_file in sorted(pdf_files):
+        filepath = os.path.join(doc_dir, pdf_file)
+        print(f"  [PDF] {pdf_file} ...")
+        docs, scanned = _load_pdf_file(filepath, pdf_file, ocr_reader)
+        all_docs.extend(docs)
+        scanned_count += scanned
 
-        if _is_docx(doc_file):
-            # Word 文档处理
-            try:
-                text = _load_docx(filepath)
-                all_docs.append(Document(
-                    page_content=text,
-                    metadata={
-                        "source": doc_file,
-                        "page": 0,
-                        "is_scanned": False,
-                    },
-                ))
-                docx_count += 1
-                print(f"    OK: Word 文档, {len(text)} 字符")
-            except Exception as e:
-                print(f"    FAIL: {doc_file}, 错误: {e}")
-            continue
+    # 加载 Word
+    for word_file in sorted(word_files):
+        filepath = os.path.join(doc_dir, word_file)
+        print(f"  [Word] {word_file} ...")
+        docs = _load_word(filepath, word_file)
+        all_docs.extend(docs)
+        print(f"    OK: {len(docs)} 段落")
 
-        # PDF 文档处理
-        try:
-            doc = fitz.open(filepath)
-            text_pages = 0
-            ocr_pages = 0
-
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                text = page.get_text()
-
-                if _is_scanned_page(text):
-                    if ocr_reader is None:
-                        print("    检测到扫描页，加载 OCR 模型...")
-                        ocr_reader = _get_ocr_reader()
-                    pix = page.get_pixmap(dpi=200)
-                    text = _ocr_page(pix, ocr_reader)
-                    ocr_pages += 1
-                    scanned_count += 1
-                else:
-                    text_pages += 1
-
-                all_docs.append(Document(
-                    page_content=text,
-                    metadata={
-                        "source": doc_file,
-                        "page": page_num,
-                        "is_scanned": _is_scanned_page(page.get_text()),
-                    },
-                ))
-
-            doc.close()
-            print(f"    OK: 文字 {text_pages} 页 + OCR {ocr_pages} 页")
-
-        except Exception as e:
-            print(f"    FAIL: {doc_file}, 错误: {e}")
-
-    print(f"共加载 {len(doc_files)} 个文档, {len(all_docs)} 页"
-          f" (PDF {len(doc_files) - docx_count} + Word {docx_count}, OCR {scanned_count} 页)")
+    print(f"共加载 {len(pdf_files)} PDF + {len(word_files)} Word"
+          f" → {len(all_docs)} 个文档 (其中 OCR {scanned_count} 页)")
     return all_docs
 
 
-# 保持向后兼容的别名
-load_pdfs = load_documents
+# 兼容旧接口
+def load_pdfs(pdf_dir: str, file_filter: str | None = None) -> List[Document]:
+    """加载目录下的 PDF 文件（兼容旧接口，内部调用 load_documents）
+
+    新代码建议直接使用 load_documents()，支持 PDF + Word。
+    """
+    return load_documents(pdf_dir, file_filter=file_filter)
 
 
 WATERMARK_PATTERNS = [
@@ -278,7 +333,7 @@ def build_vectorstore(
 
 
 def run_pipeline(
-    pdf_dir: str | None = None,
+    doc_dir: str | None = None,
     persist_dir: str | None = None,
     subdir: str | None = None,
     chunk_size: int = 1000,
@@ -287,18 +342,18 @@ def run_pipeline(
 ) -> Chroma:
     """一键执行完整的数据 Pipeline
 
-    PDF/Word → 加载 → 清洗 → 分块 → 向量化 → Chroma
+    PDF + Word → 加载 → 清洗 → 分块 → 向量化 → Chroma
 
     Args:
-        pdf_dir: 文档目录（None=自动从 Config 读取）
+        doc_dir: 文档目录（None=自动从 Config 读取）
         persist_dir: Chroma 持久化目录（None=自动从 Config 读取）
-        subdir: PDF_BASE_DIR 下的子目录名，文档和向量库按子目录分存
+        subdir: PDF_BASE_DIR 下的子目录名，PDF 和向量库按子目录分存
         file_filter: 文件名过滤关键字，None=全部
     """
     from src.config import Config
 
-    if pdf_dir is None:
-        pdf_dir = Config.get_pdf_dir(subdir)
+    if doc_dir is None:
+        doc_dir = Config.get_pdf_dir(subdir)
     if persist_dir is None:
         persist_dir = Config.get_chroma_dir(subdir)
 
@@ -306,15 +361,15 @@ def run_pipeline(
     print("数据 Pipeline 开始执行")
     if subdir:
         print(f"子目录: {subdir}")
-    print(f"文档目录: {pdf_dir}")
+    print(f"文档目录: {doc_dir}")
     print(f"向量库:   {persist_dir}")
     print("=" * 50)
 
     # 1. 加载
-    print("\n[1/4] 加载文档...")
-    docs = load_documents(pdf_dir, file_filter=file_filter)
+    print("\n[1/4] 加载文档 (PDF + Word)...")
+    docs = load_documents(doc_dir, file_filter=file_filter)
     if not docs:
-        raise ValueError(f"未找到可处理的文档: {pdf_dir}")
+        raise ValueError(f"未找到文档文件: {doc_dir}")
 
     # 2. 清洗
     print("\n[2/4] 文本清洗...")
@@ -343,14 +398,14 @@ if __name__ == "__main__":
     import sys
     import argparse
 
-    parser = argparse.ArgumentParser(description="RAG 数据 Pipeline — PDF/Word → 向量库")
+    parser = argparse.ArgumentParser(description="RAG 数据 Pipeline — PDF + Word → 向量库")
     parser.add_argument(
         "file_filter", nargs="?", default=None,
-        help="文件名过滤关键字（如 '数学'），只处理含关键字的文档"
+        help="文件名过滤关键字（如 '数学'），只处理含关键字的文件"
     )
     parser.add_argument(
         "--subdir", default=None,
-        help="PDF_BASE_DIR 下的子目录名，PDF 和向量库按子目录分存"
+        help="PDF_BASE_DIR 下的子目录名，文档和向量库按子目录分存"
     )
     args = parser.parse_args()
 

@@ -1,14 +1,13 @@
 /**
  * TopBar - 中栏顶部操作栏
- * 会话标题可点击编辑 | 知识库选择器 | 导出/刷新/高级设置
+ * 会话标题可点击编辑 | 知识库选择器 | 按 Tab 差异化的操作按钮
  */
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, RefreshCw, Download, Settings, Database, Loader, X } from 'lucide-react';
+import { RefreshCw, Download, Database, Loader } from 'lucide-react';
 import { useToast } from './Toast';
 
 const TopBar = ({
-  activeTab, showAdvancedSettings, onToggleAdvanced,
-  topK, onTopKChange, retrievalStrategy, onStrategyChange,
+  activeTab,
   currentSession, onRenameSession, onExportSession, onRefreshContext,
   /* 问答知识库选择 */
   selectedChatKB, onChatKBChange, knowledgeBases = [],
@@ -112,65 +111,31 @@ const TopBar = ({
           )}
         </div>
 
-        {/* 右侧：功能按钮区 */}
+        {/* 右侧：功能按钮区 — 按 Tab 差异化 */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={handleExport}
-            className="p-1.5 rounded-element text-text-secondary hover:text-text-primary hover:bg-gray-50 transition-colors"
-            title="导出对话">
-            <Download size={16} />
-          </button>
-          <button onClick={onRefreshContext}
-            className="p-1.5 rounded-element text-text-secondary hover:text-text-primary hover:bg-gray-50 transition-colors"
-            title="刷新上下文">
-            <RefreshCw size={16} />
-          </button>
-          <button onClick={onToggleAdvanced}
-            className="flex items-center gap-1 px-2 py-1 text-body text-text-secondary hover:text-text-primary hover:bg-gray-50 rounded-element transition-colors"
-            title="高级设置">
-            <Settings size={16} />
-            <span>高级设置</span>
-            {showAdvancedSettings ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          {activeTab === 'chat' && (
+            <>
+              <button onClick={handleExport}
+                className="p-1.5 rounded-element text-text-secondary hover:text-text-primary hover:bg-gray-50 transition-colors"
+                title="导出对话">
+                <Download size={16} />
+              </button>
+              <button onClick={onRefreshContext}
+                className="p-1.5 rounded-element text-text-secondary hover:text-text-primary hover:bg-gray-50 transition-colors"
+                title="刷新上下文">
+                <RefreshCw size={16} />
+              </button>
+            </>
+          )}
+          {activeTab === 'system' && (
+            <button onClick={onRefreshContext}
+              className="p-1.5 rounded-element text-text-secondary hover:text-text-primary hover:bg-gray-50 transition-colors"
+              title="刷新">
+              <RefreshCw size={16} />
+            </button>
+          )}
         </div>
       </div>
-
-      {/* 高级设置面板 */}
-      {showAdvancedSettings && (
-        <div className="px-6 pb-4">
-          <div className="p-4 bg-gray-50 rounded-element border border-border animate-fadeIn">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-body text-text-primary mb-2">检索数量 (Top-K)</label>
-                <div className="flex items-center gap-3">
-                  <input type="range" min="1" max="10" value={topK}
-                    onChange={(e) => onTopKChange(Number(e.target.value))}
-                    className="flex-1 h-2 bg-gray-200 rounded-element appearance-none cursor-pointer accent-brand-500" />
-                  <span className="text-body text-text-primary w-8 text-center">{topK}</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-body text-text-primary mb-2">检索策略</label>
-                <div className="flex gap-4">
-                  <label className="inline-flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="retrievalStrategy" value="similarity"
-                      checked={retrievalStrategy === 'similarity'}
-                      onChange={(e) => onStrategyChange(e.target.value)}
-                      className="text-brand-500 accent-brand-500" />
-                    <span className="text-body text-text-primary">Similarity</span>
-                  </label>
-                  <label className="inline-flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="retrievalStrategy" value="mmr"
-                      checked={retrievalStrategy === 'mmr'}
-                      onChange={(e) => onStrategyChange(e.target.value)}
-                      className="text-brand-500 accent-brand-500" />
-                    <span className="text-body text-text-primary">MMR</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

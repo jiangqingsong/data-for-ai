@@ -4,6 +4,7 @@
 """
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
 import shutil
@@ -100,6 +101,35 @@ async def startup_event():
     except Exception as e:
         print(f"初始化失败: {e}")
         raise
+
+
+@app.get("/api/knowledge-bases/{name}/documents/{filename}/raw")
+async def serve_document_raw(name: str, filename: str):
+    """直接返回文档文件（用于预览/下载）"""
+    try:
+        err = _validate_kb_name(name)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+
+        safe_name = os.path.basename(filename)
+        if safe_name != filename or ".." in filename:
+            raise HTTPException(status_code=400, detail="文件名无效")
+
+        pdf_dir = Config.get_pdf_dir(name)
+        if not os.path.isabs(pdf_dir):
+            pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+
+        filepath = os.path.join(pdf_dir, safe_name)
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail=f"文档 '{safe_name}' 不存在")
+
+        media_type = "application/pdf" if safe_name.lower().endswith('.pdf') else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        return FileResponse(filepath, media_type=media_type, filename=safe_name)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取文档失败: {str(e)}")
 
 
 @app.get("/api/health")
@@ -299,15 +329,23 @@ async def list_documents():
             pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
 
         pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))
+        word_files = glob.glob(os.path.join(pdf_dir, "*.docx"))
         documents = []
 
-        for filepath in pdf_files:
+        for filepath in pdf_files + word_files:
             filename = os.path.basename(filepath)
+            size_bytes = os.path.getsize(filepath)
             try:
-                doc = fitz.open(filepath)
-                page_count = len(doc)
-                size_bytes = os.path.getsize(filepath)
-                doc.close()
+                if filename.lower().endswith('.pdf'):
+                    doc = fitz.open(filepath)
+                    page_count = len(doc)
+                    doc.close()
+                elif filename.lower().endswith('.docx'):
+                    from docx import Document as DocxDocument
+                    wd = DocxDocument(filepath)
+                    page_count = len([p for p in wd.paragraphs if p.text.strip()])
+                else:
+                    page_count = 0
                 documents.append({
                     "filename": filename,
                     "page_count": page_count,
@@ -432,7 +470,8 @@ async def get_suggested_questions():
             pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
 
         pdf_files = glob.glob(os.path.join(pdf_dir, "*.pdf"))
-        if not pdf_files:
+        word_files = glob.glob(os.path.join(pdf_dir, "*.docx"))
+        if not pdf_files and not word_files:
             return {"questions": [], "source": "无已索引文档"}
 
         # 噪音关键词（水印、出版信息、非教学内容）
@@ -566,7 +605,7 @@ def _validate_kb_name(name: str) -> str:
 
 
 def _get_kb_stats(name: str) -> dict:
-    """获取单个知识库的文档数和向量数"""
+    """获取单个知识库的文档数和向量数（不锁 SQLite）"""
     pdf_dir = Config.get_pdf_dir(name)
     documents = []
     doc_count = 0
@@ -582,9 +621,14 @@ def _get_kb_stats(name: str) -> dict:
             fsize = os.path.getsize(fp)
             pages = 0
             try:
-                doc = fitz.open(fp)
-                pages = len(doc)
-                doc.close()
+                if fname.lower().endswith('.pdf'):
+                    doc = fitz.open(fp)
+                    pages = len(doc)
+                    doc.close()
+                elif fname.lower().endswith('.docx'):
+                    from docx import Document as DocxDocument
+                    wd = DocxDocument(fp)
+                    pages = len([p for p in wd.paragraphs if p.text.strip()])
             except Exception:
                 pass
             documents.append({
@@ -593,22 +637,40 @@ def _get_kb_stats(name: str) -> dict:
                 "page_count": pages,
             })
 
+    # 直接读 SQLite 获取向量统计，不通过 Chroma 客户端（避免锁文件）
     vector_count = 0
     chunks = []
     try:
-        r = Retriever(subdir=name)
-        vector_count = r.get_vector_count()
-        collection_data = r.vectorstore._collection.get(include=["metadatas", "documents"])
-        if collection_data and collection_data.get("ids"):
-            for i, cid in enumerate(collection_data["ids"]):
-                meta = (collection_data["metadatas"] or [{}])[i] if collection_data.get("metadatas") else {}
-                text = (collection_data["documents"] or [""])[i] if collection_data.get("documents") else ""
-                chunks.append({
-                    "id": cid,
-                    "content": (text or "")[:200],
-                    "source": meta.get("source", ""),
-                    "page": meta.get("page", ""),
-                })
+        chroma_dir = Config.get_chroma_dir(name)
+        if not os.path.isabs(chroma_dir):
+            chroma_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), chroma_dir)
+        sqlite_path = os.path.join(chroma_dir, "chroma.sqlite3")
+        if os.path.exists(sqlite_path):
+            import sqlite3
+            conn = sqlite3.connect(sqlite_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                # 读取向量数量
+                row = conn.execute("SELECT COUNT(*) as cnt FROM embedding_metadata").fetchone()
+                if row:
+                    vector_count = row["cnt"]
+                # 读取最近 50 条向量块信息
+                rows = conn.execute(
+                    "SELECT em.id, em.string_value as source, ed.string_value as content "
+                    "FROM embedding_metadata em "
+                    "LEFT JOIN embedding_metadata ed ON em.id = ed.id AND ed.key = 'document_content' "
+                    "WHERE em.key = 'source' "
+                    "LIMIT 50"
+                ).fetchall()
+                for r in rows:
+                    chunks.append({
+                        "id": r["id"],
+                        "content": (r["content"] or "")[:200] if r["content"] else "",
+                        "source": r["source"] or "",
+                        "page": "",
+                    })
+            finally:
+                conn.close()
     except Exception:
         pass
 
@@ -672,8 +734,11 @@ async def create_knowledge_base(request: CreateKBRequest):
         if not os.path.isabs(chroma_dir):
             chroma_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), chroma_dir)
 
+        # 同时检查 PDF 目录和向量库目录，防止残留数据
         if os.path.exists(pdf_dir):
-            raise HTTPException(status_code=409, detail=f"知识库 '{name}' 已存在")
+            raise HTTPException(status_code=409, detail=f"知识库 '{name}' 已存在（PDF 目录残留）")
+        if os.path.exists(chroma_dir):
+            raise HTTPException(status_code=409, detail=f"知识库 '{name}' 的向量数据已存在，可能上次删除未完成，请先手动清理")
 
         os.makedirs(pdf_dir, exist_ok=True)
         os.makedirs(chroma_dir, exist_ok=True)
@@ -688,7 +753,24 @@ async def create_knowledge_base(request: CreateKBRequest):
 
 @app.delete("/api/knowledge-bases/{name}")
 async def delete_knowledge_base(name: str):
-    """删除知识库及其所有数据"""
+    """删除知识库及其所有数据（PDF + 向量库）
+
+    删除策略:
+      1. 先尝试正常 rmtree 删除
+      2. 如果失败（文件被占用），逐个文件删除，记录失败的
+      3. 只要任一目录删不掉，返回部分失败状态
+    """
+    failed_paths = []
+
+    def _on_rmtree_error(func, path, exc_info):
+        """rmtree 错误回调：记录失败路径，不中断删除"""
+        failed_paths.append(path)
+        # 尝试单独删除该文件
+        try:
+            os.unlink(path)
+        except OSError:
+            pass  # 实在删不掉就算了，记录到 failed_paths
+
     try:
         err = _validate_kb_name(name)
         if err:
@@ -703,14 +785,35 @@ async def delete_knowledge_base(name: str):
         if not os.path.isabs(chroma_dir):
             chroma_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), chroma_dir)
 
-        if not os.path.exists(pdf_dir):
+        if not os.path.exists(pdf_dir) and not os.path.exists(chroma_dir):
             raise HTTPException(status_code=404, detail=f"知识库 '{name}' 不存在")
 
-        shutil.rmtree(pdf_dir)
-        if os.path.exists(chroma_dir):
-            shutil.rmtree(chroma_dir, ignore_errors=True)
+        # 删除 PDF 目录
+        if os.path.exists(pdf_dir):
+            shutil.rmtree(pdf_dir, onerror=_on_rmtree_error)
 
-        return {"name": name, "status": "deleted"}
+        # 删除向量库目录（不再用 ignore_errors，逐个文件尝试删除）
+        if os.path.exists(chroma_dir):
+            shutil.rmtree(chroma_dir, onerror=_on_rmtree_error)
+
+        # 检查删除结果
+        pdf_deleted = not os.path.exists(pdf_dir)
+        chroma_deleted = not os.path.exists(chroma_dir)
+
+        if pdf_deleted and chroma_deleted:
+            return {"name": name, "status": "deleted", "detail": "所有数据已清除"}
+        else:
+            remaining = []
+            if not pdf_deleted:
+                remaining.append(f"PDF 目录 ({pdf_dir})")
+            if not chroma_deleted:
+                remaining.append(f"向量库 ({chroma_dir})")
+            return {
+                "name": name,
+                "status": "partial",
+                "detail": f"部分删除成功，以下未完全清除: {'; '.join(remaining)}",
+                "failed_paths": failed_paths[-10:],  # 最多返回 10 个失败路径
+            }
 
     except HTTPException:
         raise
@@ -735,6 +838,60 @@ async def get_knowledge_base_stats(name: str):
         raise HTTPException(status_code=500, detail=f"获取知识库统计失败: {str(e)}")
 
 
+@app.delete("/api/knowledge-bases/{name}/documents/{filename}")
+async def delete_document_from_kb(name: str, filename: str):
+    """删除知识库中的指定文档及其向量数据"""
+    try:
+        err = _validate_kb_name(name)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+
+        # 安全检查：防止路径穿越
+        safe_name = os.path.basename(filename)
+        if safe_name != filename or ".." in filename:
+            raise HTTPException(status_code=400, detail="文件名无效")
+
+        pdf_dir = Config.get_pdf_dir(name)
+        if not os.path.isabs(pdf_dir):
+            pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+
+        filepath = os.path.join(pdf_dir, safe_name)
+        if not os.path.exists(filepath):
+            raise HTTPException(status_code=404, detail=f"文档 '{safe_name}' 不存在")
+
+        # 1. 删除物理文件
+        os.remove(filepath)
+
+        # 2. 删除对应的向量数据（从 Chroma 中删除该文档的所有 chunks）
+        try:
+            chroma_dir = Config.get_chroma_dir(name)
+            if not os.path.isabs(chroma_dir):
+                chroma_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), chroma_dir)
+            if os.path.exists(chroma_dir):
+                r = Retriever(subdir=name)
+                collection = r.vectorstore._collection
+                # 获取所有数据，筛选出 source 匹配该文件名的 IDs
+                all_data = collection.get(include=["metadatas"])
+                ids_to_delete = []
+                if all_data and all_data.get("ids") and all_data.get("metadatas"):
+                    for i, cid in enumerate(all_data["ids"]):
+                        meta = all_data["metadatas"][i] or {}
+                        if meta.get("source") == safe_name:
+                            ids_to_delete.append(cid)
+                if ids_to_delete:
+                    collection.delete(ids=ids_to_delete)
+                    print(f"已从向量库删除 {len(ids_to_delete)} 个向量块 (文档: {safe_name})")
+        except Exception as e:
+            print(f"警告: 删除向量数据失败（文件已删除）: {e}")
+
+        return {"filename": safe_name, "status": "deleted", "detail": f"文档 '{safe_name}' 及其向量数据已删除"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除文档失败: {str(e)}")
+
+
 @app.post("/api/knowledge-bases/{name}/upload")
 async def upload_document_to_kb(name: str, file: UploadFile = File(...)):
     """上传文档到指定知识库"""
@@ -744,7 +901,7 @@ async def upload_document_to_kb(name: str, file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=err)
 
         if not file.filename or not file.filename.lower().endswith(('.pdf', '.doc', '.docx')):
-            raise HTTPException(status_code=400, detail="仅支持上传 PDF 和 Word (.docx) 文件")
+            raise HTTPException(status_code=400, detail="仅支持上传 PDF 和 Word (.doc, .docx) 文件")
 
         # 安全文件名
         safe_name = os.path.basename(file.filename)
@@ -762,14 +919,22 @@ async def upload_document_to_kb(name: str, file: UploadFile = File(...)):
         with open(filepath, "wb") as f:
             f.write(content)
 
-        # 获取页数
+        # 获取页数（PDF用fitz，Word用python-docx）
         page_count = 0
-        try:
-            doc = fitz.open(filepath)
-            page_count = len(doc)
-            doc.close()
-        except Exception:
-            pass
+        if safe_name.lower().endswith('.pdf'):
+            try:
+                doc = fitz.open(filepath)
+                page_count = len(doc)
+                doc.close()
+            except Exception:
+                pass
+        elif safe_name.lower().endswith('.docx'):
+            try:
+                from docx import Document as DocxDocument
+                wd = DocxDocument(filepath)
+                page_count = len([p for p in wd.paragraphs if p.text.strip()])
+            except Exception:
+                pass
 
         return {
             "filename": safe_name,
@@ -786,6 +951,9 @@ async def upload_document_to_kb(name: str, file: UploadFile = File(...)):
 @app.post("/api/knowledge-bases/{name}/pipeline")
 async def trigger_pipeline(name: str):
     """手动触发知识库 Pipeline"""
+    import traceback
+    from src.pipeline_logger import get_pipeline_logger, clear_log_buffer
+
     try:
         err = _validate_kb_name(name)
         if err:
@@ -794,43 +962,135 @@ async def trigger_pipeline(name: str):
         if _running_pipelines.get(name):
             raise HTTPException(status_code=409, detail=f"知识库 '{name}' 的 Pipeline 正在运行中")
 
+        # ── 诊断：检查目录和文件 ──
+        logger = get_pipeline_logger(name)
+        logger.info(f"══════ Pipeline 启动: 知识库「{name}」══════")
+
         pdf_dir = Config.get_pdf_dir(name)
         if not os.path.isabs(pdf_dir):
             pdf_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), pdf_dir)
+
+        logger.info(f"文档目录: {pdf_dir}")
+        logger.info(f"目录存在: {os.path.exists(pdf_dir)}")
+
+        if not os.path.exists(pdf_dir):
+            logger.error(f"文档目录不存在: {pdf_dir}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"知识库「{name}」的文档目录不存在: {pdf_dir}。请先上传文件。"
+            )
 
         doc_files = sorted([
             f for f in os.listdir(pdf_dir)
             if f.lower().endswith(('.pdf', '.docx')) and not f.startswith('~')
         ])
-        if not doc_files:
-            raise HTTPException(status_code=400, detail=f"知识库 '{name}' 中没有可处理的文档")
 
+        logger.info(f"文档文件 ({len(doc_files)}): {doc_files}")
+
+        if not doc_files:
+            logger.error("目录存在但没有 PDF/Word 文件")
+            raise HTTPException(
+                status_code=400,
+                detail=f"知识库「{name}」的文档目录为空，请先上传 PDF 或 Word 文件。"
+            )
+
+        # 检查 PDF 是否损坏
+        for f in pdf_files:
+            try:
+                test_doc = fitz.open(f)
+                logger.info(f"  PDF 校验 OK: {os.path.basename(f)} ({len(test_doc)} 页)")
+                test_doc.close()
+            except Exception as e:
+                logger.error(f"  PDF 损坏: {os.path.basename(f)} — {e}")
+
+        chroma_dir = Config.get_chroma_dir(name)
+        if not os.path.isabs(chroma_dir):
+            chroma_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), chroma_dir)
+        logger.info(f"向量库目录: {chroma_dir}")
+
+        # 清理旧日志缓冲区
+        clear_log_buffer(name)
+
+        # ── 启动后台 Pipeline ──
         _running_pipelines[name] = True
-        _pipeline_progress[name] = {"step": "starting", "message": "正在启动 Pipeline...", "progress_pct": 0}
+        _pipeline_progress[name] = {
+            "step": "starting",
+            "message": "正在启动 Pipeline...",
+            "progress_pct": 0,
+            "error_detail": None,
+        }
 
         def _run():
             try:
                 from src.pipeline import load_documents, clean_documents, split_documents, build_vectorstore
 
-                _pipeline_progress[name] = {"step": "loading", "message": "正在加载文档...", "progress_pct": 5}
+                logger.info("[1/4] 加载文档...")
+                _pipeline_progress[name] = {
+                    "step": "loading", "message": "正在加载文档 (PDF + Word)...",
+                    "progress_pct": 5, "error_detail": None,
+                }
                 docs = load_documents(pdf_dir)
                 if not docs:
-                    _pipeline_progress[name] = {"step": "error", "message": "未找到可处理的文档", "progress_pct": 0}
+                    msg = "未找到可处理的文档内容（文档可能为空或无法解析）"
+                    logger.error(msg)
+                    _pipeline_progress[name] = {
+                        "step": "error", "message": msg, "progress_pct": 0,
+                        "error_detail": "load_documents 返回空列表。可能原因：PDF 全为扫描页且 OCR 失败，或文档内容过少被过滤。",
+                    }
+                    return
+                logger.info(f"  加载完成: {len(docs)} 个页面/段落")
+
+                logger.info("[2/4] 清洗文本...")
+                _pipeline_progress[name] = {
+                    "step": "cleaning", "message": "正在清洗文本...",
+                    "progress_pct": 25, "error_detail": None,
+                }
+                before_clean = len(docs)
+                docs = clean_documents(docs)
+                logger.info(f"  清洗完成: {before_clean} → {len(docs)} (过滤 {before_clean - len(docs)} 个空文档)")
+
+                if not docs:
+                    msg = "清洗后没有有效内容（所有文档内容过短或仅含水印）"
+                    logger.error(msg)
+                    _pipeline_progress[name] = {
+                        "step": "error", "message": msg, "progress_pct": 0,
+                        "error_detail": "clean_documents 过滤掉了所有文档。请检查 PDF 内容质量。",
+                    }
                     return
 
-                _pipeline_progress[name] = {"step": "cleaning", "message": "正在清洗文本...", "progress_pct": 25}
-                docs = clean_documents(docs)
-
-                _pipeline_progress[name] = {"step": "splitting", "message": "正在分块...", "progress_pct": 45}
+                logger.info("[3/4] 文档分块...")
+                _pipeline_progress[name] = {
+                    "step": "splitting", "message": "正在分块...",
+                    "progress_pct": 45, "error_detail": None,
+                }
                 chunks = split_documents(docs)
+                logger.info(f"  分块完成: {len(chunks)} 个块")
 
-                _pipeline_progress[name] = {"step": "embedding", "message": f"正在向量化（共 {len(chunks)} 个块，可能需要几分钟）...", "progress_pct": 60}
-                chroma_dir = Config.get_chroma_dir(name)
+                logger.info(f"[4/4] 向量化 ({len(chunks)} chunks)...")
+                _pipeline_progress[name] = {
+                    "step": "embedding",
+                    "message": f"正在向量化（共 {len(chunks)} 个块）...",
+                    "progress_pct": 60, "error_detail": None,
+                }
                 build_vectorstore(chunks, chroma_dir)
+                logger.info(f"  向量化完成 → {chroma_dir}")
 
-                _pipeline_progress[name] = {"step": "done", "message": f"Pipeline 完成 — {len(docs)} 页 → {len(chunks)} 个向量块", "progress_pct": 100}
+                done_msg = f"Pipeline 完成 — {len(docs)} 页 → {len(chunks)} 个向量块"
+                logger.info(f"══════ Pipeline 完成: {done_msg} ══════")
+                _pipeline_progress[name] = {
+                    "step": "done", "message": done_msg, "progress_pct": 100,
+                    "error_detail": None,
+                }
             except Exception as e:
-                _pipeline_progress[name] = {"step": "error", "message": f"Pipeline 失败: {str(e)}", "progress_pct": 0}
+                tb = traceback.format_exc()
+                logger.error(f"Pipeline 异常: {e}")
+                logger.error(tb)
+                _pipeline_progress[name] = {
+                    "step": "error",
+                    "message": f"Pipeline 失败: {str(e)}",
+                    "progress_pct": 0,
+                    "error_detail": tb[-500:],  # 返回最后 500 字符的 traceback
+                }
             finally:
                 _running_pipelines[name] = False
 
@@ -853,7 +1113,7 @@ async def get_pipeline_status(name: str):
         raise HTTPException(status_code=400, detail=err)
 
     is_running = _running_pipelines.get(name, False)
-    progress = _pipeline_progress.get(name, {"step": "idle", "message": "", "progress_pct": 0})
+    progress = _pipeline_progress.get(name, {"step": "idle", "message": "", "progress_pct": 0, "error_detail": None})
 
     return {
         "name": name,
@@ -861,6 +1121,24 @@ async def get_pipeline_status(name: str):
         "step": progress.get("step", "idle"),
         "message": progress.get("message", ""),
         "progress_pct": progress.get("progress_pct", 0),
+        "error_detail": progress.get("error_detail"),
+    }
+
+
+@app.get("/api/knowledge-bases/{name}/pipeline/logs")
+async def get_pipeline_logs(name: str):
+    """查询 Pipeline 实时日志（最近 N 行）"""
+    from src.pipeline_logger import get_log_buffer
+
+    err = _validate_kb_name(name)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    logs = get_log_buffer(name)
+    return {
+        "name": name,
+        "log_count": len(logs),
+        "logs": logs,
     }
 
 

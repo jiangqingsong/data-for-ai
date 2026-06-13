@@ -9,7 +9,6 @@ import InputBar from './InputBar';
 
 const MainContent = ({
   activeTab,
-  showAdvancedSettings, onToggleAdvanced,
   topK, onTopKChange,
   retrievalStrategy, onStrategyChange,
   messages, messagesEndRef,
@@ -25,7 +24,9 @@ const MainContent = ({
   /* 迭代5: 知识库管理 */
   knowledgeBases, selectedKBName, selectedKBStats,
   isKBLoading, onCreateKB, onDeleteKB,
-  onSelectKB, onUploadDocument, onTriggerPipeline,
+  onSelectKB, onUploadDocument, onTriggerPipeline, onDeleteDocument,
+  /* Pipeline 全局状态 */
+  pipelineRunningKB, pipelineStatus, onDismissPipelineStatus,
   /* 问答知识库选择 */
   selectedChatKB, onChatKBChange,
 }) => {
@@ -35,12 +36,6 @@ const MainContent = ({
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       <TopBar
         activeTab={activeTab}
-        showAdvancedSettings={showAdvancedSettings}
-        onToggleAdvanced={onToggleAdvanced}
-        topK={topK}
-        onTopKChange={onTopKChange}
-        retrievalStrategy={retrievalStrategy}
-        onStrategyChange={onStrategyChange}
         currentSession={currentSession}
         onRenameSession={onRenameSession}
         onExportSession={onExportSession}
@@ -49,6 +44,9 @@ const MainContent = ({
         selectedChatKB={selectedChatKB}
         onChatKBChange={onChatKBChange}
         knowledgeBases={knowledgeBases}
+        /* Pipeline 全局状态 */
+        pipelineRunningKB={pipelineRunningKB}
+        pipelineStatus={pipelineStatus}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -77,6 +75,11 @@ const MainContent = ({
           onSelectKB={onSelectKB}
           onUploadDocument={onUploadDocument}
           onTriggerPipeline={onTriggerPipeline}
+          onDeleteDocument={onDeleteDocument}
+          /* Pipeline 全局状态 */
+          pipelineRunningKB={pipelineRunningKB}
+          pipelineStatus={pipelineStatus}
+          onDismissPipelineStatus={onDismissPipelineStatus}
         />
       </div>
 
@@ -88,6 +91,11 @@ const MainContent = ({
           isLoading={messages.some(m => m.isStreaming)}
           suggestedQuestions={suggestedQuestions}
           suggestedQuestionsLoading={suggestedQuestionsLoading}
+          /* 高级检索设置 */
+          topK={topK}
+          onTopKChange={onTopKChange}
+          retrievalStrategy={retrievalStrategy}
+          onStrategyChange={onStrategyChange}
         />
       )}
     </div>

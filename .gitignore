@@ -22,3 +22,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Logs
+logs/
+rag-knowledge-qa/backend/logs/
